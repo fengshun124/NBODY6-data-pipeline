@@ -1,1 +1,1 @@
-# NBody6-analysis
+# N-Body6 Data Analysis
