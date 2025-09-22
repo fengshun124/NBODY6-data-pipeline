@@ -1,14 +1,15 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Union, List
+from typing import Dict, List, Tuple, Union
 
 import pandas as pd
+import pickle
 
 
 @dataclass(slots=True)
 class Snapshot:
     time: float
-    header: Dict[str, Union[int, float, str]]
+    header: Dict[str, Union[int, float, str, Tuple[float, float, float]]]
     stars: pd.DataFrame
     binary_systems: pd.DataFrame
 
@@ -31,11 +32,11 @@ class Snapshot:
             and self.binary_systems.equals(value.binary_systems)
         )
 
-    def to_dict(self, is_materialize: bool = False) -> Dict:
+    def to_dict(self, is_materialize: bool = True) -> Dict:
         if is_materialize:
             return {
-                "time": self.time,
-                "header": self.header,
+                "time": float(self.time),
+                "header": dict(self.header),
                 "stars": self.stars.to_dict(orient="records"),
                 "binary_systems": self.binary_systems.to_dict(orient="records"),
             }
@@ -50,17 +51,21 @@ class Snapshot:
     @classmethod
     def from_dict(cls, data: Dict) -> "Snapshot":
         return cls(
-            time=data["time"],
-            header=data["header"],
-            stars=pd.DataFrame(data["stars"]),
-            binary_systems=pd.DataFrame(data["binary_systems"]),
+            time=float(data["time"]),
+            header=dict(data["header"]),
+            stars=pd.DataFrame(data["stars"])
+            if isinstance(data["stars"], list)
+            else data["stars"],
+            binary_systems=pd.DataFrame(data["binary_systems"])
+            if isinstance(data["binary_systems"], list)
+            else data["binary_systems"],
         )
 
     @classmethod
     def from_pickle(cls, filepath: Union[str, Path]) -> "Snapshot":
         filepath = Path(filepath)
         with open(filepath, "rb") as f:
-            data = pd.read_pickle(f)
+            data = pickle.load(f)
         return cls.from_dict(data)
 
 
@@ -93,14 +98,14 @@ class SnapshotSeries:
 
     @property
     def timestamps(self) -> List[float]:
-        return list(self.snapshots.keys())
+        return sorted(self.snapshots.keys())
 
-    def to_dict(self, is_materialize: bool = False) -> Dict:
+    def to_dict(self, is_materialize: bool = True) -> Dict:
         if is_materialize:
             return {
                 "root": str(self.root),
                 "snapshots": {
-                    time: snapshot.to_dict(is_materialize=True)
+                    str(time): snapshot.to_dict(is_materialize=True)
                     for time, snapshot in self.snapshots.items()
                 },
             }
@@ -110,11 +115,11 @@ class SnapshotSeries:
                 "snapshots": self.snapshots,
             }
 
-    def to_pickle(self, filepath: Union[str, Path], is_materialize: bool = False):
+    def to_pickle(self, filepath: Union[str, Path], is_materialize: bool = True):
         filepath = Path(filepath)
         data = self.to_dict(is_materialize=is_materialize)
         with open(filepath, "wb") as f:
-            pd.to_pickle(data, f)
+            pickle.dump(data, f)
 
     @classmethod
     def from_dict(cls, data: Dict) -> "SnapshotSeries":
@@ -130,5 +135,5 @@ class SnapshotSeries:
     def from_pickle(cls, filepath: Union[str, Path]) -> "SnapshotSeries":
         filepath = Path(filepath)
         with open(filepath, "rb") as f:
-            data = pd.read_pickle(f)
+            data = pickle.load(f)
         return cls.from_dict(data)

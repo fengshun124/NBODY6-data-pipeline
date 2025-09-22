@@ -1,6 +1,7 @@
+import pickle
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Union
+from typing import Dict, Union
 
 import pandas as pd
 
@@ -10,9 +11,9 @@ from nbody6.utils.calc.cluster import Coord3D
 @dataclass(slots=True)
 class PseudoObservedSnapshot:
     time: float
-    pseudo_galactic_center: Coord3D
+    simulated_galactic_center: Coord3D
     observation: pd.DataFrame
-    header: dict
+    header: Dict[str, Union[int, float, str]]
     stars: pd.DataFrame
     binary_systems: pd.DataFrame
 
@@ -31,27 +32,27 @@ class PseudoObservedSnapshot:
             return NotImplemented
         return (
             self.time == value.time
-            and self.pseudo_galactic_center == value.pseudo_galactic_center
+            and self.simulated_galactic_center == value.simulated_galactic_center
             and self.observation.equals(value.observation)
             and self.header == value.header
             and self.stars.equals(value.stars)
             and self.binary_systems.equals(value.binary_systems)
         )
 
-    def to_dict(self, is_materialize: bool = False) -> dict:
+    def to_dict(self, is_materialize: bool = True) -> dict:
         if is_materialize:
             return {
-                "time": self.time,
-                "pseudo_galactic_center": self.pseudo_galactic_center,
+                "time": float(self.time),
+                "simulated_galactic_center": list(self.simulated_galactic_center),
                 "observation": self.observation.to_dict(orient="records"),
-                "header": self.header,
+                "header": dict(self.header),
                 "stars": self.stars.to_dict(orient="records"),
                 "binary_systems": self.binary_systems.to_dict(orient="records"),
             }
         else:
             return {
                 "time": self.time,
-                "pseudo_galactic_center": self.pseudo_galactic_center,
+                "simulated_galactic_center": self.simulated_galactic_center,
                 "observation": self.observation,
                 "header": self.header,
                 "stars": self.stars,
@@ -60,27 +61,37 @@ class PseudoObservedSnapshot:
 
     @classmethod
     def from_dict(cls, data: dict) -> "PseudoObservedSnapshot":
+        galactic_center = data["simulated_galactic_center"]
+
         return cls(
-            time=data["time"],
-            pseudo_galactic_center=tuple(data["pseudo_galactic_center"]),
-            observation=pd.DataFrame(data["observation"]),
-            header=data["header"],
-            stars=pd.DataFrame(data["stars"]),
-            binary_systems=pd.DataFrame(data["binary_systems"]),
+            time=float(data["time"]),
+            simulated_galactic_center=tuple(galactic_center)
+            if isinstance(galactic_center, (list, tuple))
+            else galactic_center,
+            observation=pd.DataFrame(data["observation"])
+            if isinstance(data["observation"], list)
+            else data["observation"],
+            header=dict(data["header"]),
+            stars=pd.DataFrame(data["stars"])
+            if isinstance(data["stars"], list)
+            else data["stars"],
+            binary_systems=pd.DataFrame(data["binary_systems"])
+            if isinstance(data["binary_systems"], list)
+            else data["binary_systems"],
         )
 
     @classmethod
     def from_pickle(cls, filepath: Union[str, Path]) -> "PseudoObservedSnapshot":
         filepath = Path(filepath)
         with open(filepath, "rb") as f:
-            data = pd.read_pickle(f)
+            data = pickle.load(f)
         return cls.from_dict(data)
 
 
 @dataclass(slots=True)
 class PseudoObservedSnapshotSeries:
     root: Path
-    snapshots: dict[float, PseudoObservedSnapshot]
+    snapshots: Dict[float, PseudoObservedSnapshot]
 
     def __repr__(self) -> str:
         return (
@@ -106,14 +117,20 @@ class PseudoObservedSnapshotSeries:
 
     @property
     def timestamps(self) -> list[float]:
-        return list(self.snapshots.keys())
+        return sorted(self.snapshots.keys())
 
-    def to_dict(self, is_materialize: bool = False) -> dict:
+    def to_dict(self, is_materialize: bool = True) -> dict:
+        """
+        Convert pseudo-observed snapshot series to dictionary.
+
+        Args:
+            is_materialize: If True, converts all data to serializable format.
+        """
         if is_materialize:
             return {
                 "root": str(self.root),
                 "snapshots": {
-                    time: snapshot.to_dict(is_materialize=True)
+                    str(time): snapshot.to_dict(is_materialize=True)
                     for time, snapshot in self.snapshots.items()
                 },
             }
@@ -123,11 +140,11 @@ class PseudoObservedSnapshotSeries:
                 "snapshots": self.snapshots,
             }
 
-    def to_pickle(self, filepath: Union[str, Path], is_materialize: bool = False):
+    def to_pickle(self, filepath: Union[str, Path], is_materialize: bool = True):
         filepath = Path(filepath)
         data = self.to_dict(is_materialize=is_materialize)
         with open(filepath, "wb") as f:
-            pd.to_pickle(data, f)
+            pickle.dump(data, f)
 
     @classmethod
     def from_dict(cls, data: dict) -> "PseudoObservedSnapshotSeries":
@@ -143,5 +160,5 @@ class PseudoObservedSnapshotSeries:
     def from_pickle(cls, filepath: Union[str, Path]) -> "PseudoObservedSnapshotSeries":
         filepath = Path(filepath)
         with open(filepath, "rb") as f:
-            data = pd.read_pickle(f)
+            data = pickle.load(f)
         return cls.from_dict(data)

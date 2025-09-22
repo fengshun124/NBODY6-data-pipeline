@@ -246,7 +246,7 @@ class PseudoObserver:
             )
 
         observed_snapshot = PseudoObservedSnapshot(
-            pseudo_galactic_center=coordinate,
+            simulated_galactic_center=coordinate,
             time=snapshot.time,
             header=snapshot.header,
             observation=pd.concat(
