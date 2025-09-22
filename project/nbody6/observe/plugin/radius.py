@@ -5,7 +5,7 @@ from nbody6.utils.calc.cluster import calc_half_mass_radius
 
 class HalfMassRadiusCalculator(PseudoObserverPluginBase):
     def __call__(self, snapshot: PseudoObservedSnapshot) -> PseudoObservedSnapshot:
-        obs_df = snapshot.stars
+        obs_df = snapshot.observation
         header = snapshot.header
 
         half_mass_radius = calc_half_mass_radius(

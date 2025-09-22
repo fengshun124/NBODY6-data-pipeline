@@ -22,7 +22,7 @@ def calc_half_mass_radius(
     z_pc_key: str = "z",
 ) -> float:
     distances = np.linalg.norm(
-        stars_df[[x_pc_key, y_pc_key, z_pc_key]].values
+        stars_df[[x_pc_key, y_pc_key, z_pc_key]].astype(float).values
         - np.asarray(center_coords_pc)[np.newaxis, :],
         axis=1,
     )

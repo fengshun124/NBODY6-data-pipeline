@@ -175,10 +175,12 @@ class PseudoObserver:
 
         # collect single stars from the converted dataframe
         single_stars_df = raw_stars_df[~raw_stars_df["is_binary"]].assign(
-            is_unresolved_binary=False
+            is_unresolved_binary=False, pair=-1
         )
-
         bin_sys_df = snapshot.binary_systems.copy()
+        bin_sys_df["pair"] = bin_sys_df.apply(
+            lambda row: _compose_label(row["obj1_ids"], row["obj2_ids"]), axis=1
+        )
         bin_sys_df["obs_dist_pc"] = bin_sys_df.apply(
             lambda row: np.mean(
                 raw_stars_df[
@@ -187,21 +189,29 @@ class PseudoObserver:
             ),
             axis=1,
         )
+        bin_sys_df["is_unresolved_binary"] = (
+            bin_sys_df["semi"] <= bin_sys_df["obs_dist_pc"] * 0.6
+        )
 
         # collect resolved binaries
-        resolved_bin_sys_df = bin_sys_df[
-            bin_sys_df["semi"] > bin_sys_df["obs_dist_pc"] * 0.6
-        ]
+        resolved_bin_sys_df = bin_sys_df[~bin_sys_df["is_unresolved_binary"]]
+        resolved_stars_names = resolved_bin_sys_df[["obj1_ids", "obj2_ids"]].sum().sum()
         resolved_binaries_df = raw_stars_df[
-            raw_stars_df["name"].isin(
-                resolved_bin_sys_df[["obj1_ids", "obj2_ids"]].sum().sum()
-            )
+            raw_stars_df["name"].isin(resolved_stars_names)
         ].assign(is_unresolved_binary=False)
 
+        # Assign pair_id to resolved binary components
+        name_to_pair_map = {
+            name: row["pair"]
+            for _, row in resolved_bin_sys_df.iterrows()
+            for name in row["obj1_ids"] + row["obj2_ids"]
+        }
+        resolved_binaries_df["pair"] = resolved_binaries_df["name"].map(
+            name_to_pair_map
+        )
+
         # collect unresolved binaries
-        unresolved_bin_sys_df = bin_sys_df[
-            ~bin_sys_df.index.isin(resolved_bin_sys_df.index)
-        ]
+        unresolved_bin_sys_df = bin_sys_df[bin_sys_df["is_unresolved_binary"]]
         memo: Dict[Tuple[int, ...], Dict[str, float]] = {}
 
         def _resolve_group(ids: List[int]) -> Dict[str, float]:
@@ -226,9 +236,7 @@ class PseudoObserver:
         unresolved_binaries_df = (
             pd.DataFrame(
                 {
-                    _compose_label(
-                        pair["obj1_ids"], pair["obj2_ids"]
-                    ): self._merge_unresolved_binaries(
+                    pair["pair"]: self._merge_unresolved_binaries(
                         star1_attr=_resolve_group(pair["obj1_ids"]),
                         star2_attr=_resolve_group(pair["obj2_ids"]),
                         header_dict=snapshot.header,
@@ -240,6 +248,7 @@ class PseudoObserver:
             .rename(columns={"index": "name"})
         )
         if not unresolved_binaries_df.empty:
+            unresolved_binaries_df["pair"] = unresolved_binaries_df["name"]
             unresolved_binaries_df = convert_to_offset_frame(
                 cluster_center_pc=coordinate,
                 centered_stars_df=unresolved_binaries_df,
@@ -267,7 +276,7 @@ class PseudoObserver:
             )
             .reset_index(drop=True),
             stars=snapshot.stars,
-            binary_systems=snapshot.binary_systems,
+            binary_systems=bin_sys_df,
         )
 
         for plugin in self._observer_plugins:

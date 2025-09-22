@@ -11,7 +11,6 @@ from joblib import Parallel, delayed
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-
 SIM_ATTR_PATTERN = re.compile(r"Rad(\d{2})/zmet(\d{4})/M(\d)/(\d{4})")
 DATA_BASE_PATH = Path("../../../data/NBody6/data/").resolve()
 # configure log directory
@@ -68,7 +67,7 @@ def setup_logger(log_file) -> None:
 def extract_output(sim_path: Path, sim_exp_label: str, log_file: str) -> None:
     setup_logger(log_file)
 
-    from nbody6.assemble import SnapshotAssembler
+    from nbody6.assemble import SnapshotAssembler, SnapshotSeries
     from nbody6.assemble.plugin import BasicPhotometryCalculator
     from nbody6.load import SimulationDataLoader
     from nbody6.observe import PseudoObserver
@@ -84,26 +83,36 @@ def extract_output(sim_path: Path, sim_exp_label: str, log_file: str) -> None:
     try:
         logging.debug(f"[{sim_exp_label}] Start processing {sim_path}")
 
-        loader = SimulationDataLoader(sim_path)
-        loader.load(is_verbose=True, is_allow_timestamp_trim=True)
-        logging.debug(f"[{sim_exp_label}] Loaded {loader}")
+        cache_raw_file = cache_dir / f"{sim_exp_label}-raw.pkl"
+        if cache_raw_file.is_file():
+            logging.debug(
+                f"[{sim_exp_label}] Loading cached raw data from {cache_raw_file}"
+            )
+            snapshot_series = SnapshotSeries.from_pickle(cache_raw_file)
+        else:
+            logging.debug(f"[{sim_exp_label}] Loading raw data from {sim_path}")
+            loader = SimulationDataLoader(sim_path)
+            loader.load(is_verbose=True, is_allow_timestamp_trim=True)
+            logging.debug(f"[{sim_exp_label}] Loaded {loader}")
 
-        assembler = SnapshotAssembler(
-            raw_data=loader.simulation_data,
-            assembler_plugins=[BasicPhotometryCalculator()],
-        )
-        snapshots = assembler.assemble_all(is_strict=False, is_verbose=True)
-        logging.debug(
-            f"[{sim_exp_label}] Assembled {assembler} with {len(snapshots)} snapshots"
-        )
+            assembler = SnapshotAssembler(
+                raw_data=loader.simulation_data,
+                assembler_plugins=[BasicPhotometryCalculator()],
+            )
+            snapshot_series = assembler.assemble_all(is_strict=False, is_verbose=True)
+            logging.debug(
+                f"[{sim_exp_label}] Assembled {assembler} with {len(snapshot_series)} snapshots"
+            )
 
-        snapshots.to_pickle(cache_dir / f"{sim_exp_label}-raw.pkl", is_materialize=True)
+            snapshot_series.to_pickle(
+                cache_dir / f"{sim_exp_label}-raw.pkl", is_materialize=True
+            )
 
-        del assembler, loader
-        gc.collect()
+            del assembler, loader
+            gc.collect()
 
         observer = PseudoObserver(
-            raw_snapshots=snapshots,
+            raw_snapshots=snapshot_series,
             observer_plugins=[
                 TwiceTidalRadiusCut(),
                 HalfMassRadiusCalculator(),
@@ -112,35 +121,40 @@ def extract_output(sim_path: Path, sim_exp_label: str, log_file: str) -> None:
         )
         pseudo_obs_centers = [
             (dist_pc, 0, 0)
-            for dist_pc in list(range(50, 700, 50)) + list(range(700, 1300, 100))
+            # for dist_pc in list(range(50, 700, 50)) + list(range(700, 1300, 100))
+            for dist_pc in list(range(50, 1300, 100))
         ]
 
         obs_snapshot_dict = observer.observe(pseudo_obs_centers)
         logging.debug(
             f"[{sim_exp_label}] Observed {observer} with "
-            f"{len(obs_snapshot_dict) * len(snapshots)} pseudo-observed snapshots"
+            f"{len(obs_snapshot_dict) * len(snapshot_series)} pseudo-observed snapshots"
         )
-        with open(cache_dir / f"{sim_exp_label}-obs.pkl", "wb") as f:
-            pickle.dump(
-                {
-                    coord: snapshot_series.to_dict(is_materialize=True)
-                    for coord, snapshot_series in obs_snapshot_dict.items()
-                },
-                f,
-            )
 
-        del snapshots, observer, obs_snapshot_dict
+        obs_snapshot_cache_file = cache_dir / f"{sim_exp_label}-obs.pkl"
+        if obs_snapshot_cache_file.is_file():
+            pass
+        else:
+            with open(cache_dir / f"{sim_exp_label}-obs.pkl", "wb") as f:
+                pickle.dump(
+                    {
+                        coord: snapshot_series.to_dict(is_materialize=True)
+                        for coord, snapshot_series in obs_snapshot_dict.items()
+                    },
+                    f,
+                )
+
+        del snapshot_series, observer, obs_snapshot_dict
         gc.collect()
 
         logging.info(f"Finished processing {sim_path}")
     except Exception as e:
         logging.error(f"Failed to process {sim_path}: {e}")
         gc.collect()
-        # raise
 
 
 def extract_batch():
-    setup_logger(LOG_FILE_DIR / "all.log")
+    setup_logger(LOG_FILE_DIR / "batch.log")
 
     simulations = fetch_simulation_root(DATA_BASE_PATH)
     random.shuffle(simulations)
@@ -151,19 +165,20 @@ def extract_batch():
             LOG_FILE_DIR / "batch.log",
         )
         for sim_init_dict, sim_path, sim_exp_label in simulations
-        if sim_init_dict["init_mass_lv"] in [2, 3, 4]
+        if sim_init_dict["init_mass_lv"] in [5, 6, 7, 8]
     )
 
 
 def extract_single():
-    sim_path = Path(DATA_BASE_PATH / "Rad08/zmet0006/M6/0003")
+    sim_exp_label = "Rad4-zmet0002-M4-0012"
+    sim_path = Path(DATA_BASE_PATH / sim_exp_label.replace("-", "/")).resolve()
     extract_output(
         sim_path,
-        "Rad08-zmet0006-M6-0003",
+        sim_exp_label,
         LOG_FILE_DIR / "single.log",
     )
 
 
 if __name__ == "__main__":
-    extract_batch()
-    # test_single()
+    # extract_batch()
+    extract_single()
