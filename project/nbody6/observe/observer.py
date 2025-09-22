@@ -190,7 +190,7 @@ class PseudoObserver:
 
         # collect resolved binaries
         resolved_bin_sys_df = bin_sys_df[
-            bin_sys_df["obs_dist_pc"] * 0.6 >= bin_sys_df["semi"]
+            bin_sys_df["semi"] > bin_sys_df["obs_dist_pc"] * 0.6
         ]
         resolved_binaries_df = raw_stars_df[
             raw_stars_df["name"].isin(
