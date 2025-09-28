@@ -3,7 +3,7 @@ from typing import Union
 
 import numpy as np
 
-from nbody6.load.parser import FileParserBase, FileParserConfig
+from nbody6.parser import FileParserBase, FileParserConfig
 
 OUT34_PARSER_CONFIG = FileParserConfig(
     header_prefix="#",

@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Union
 
-from nbody6.load.parser.base import FileParserBase, FileParserConfig
+from nbody6.parser.base import FileParserBase, FileParserConfig
 
 FORT83_PARSER_CONFIG = FileParserConfig(
     header_prefix="## BEGIN",

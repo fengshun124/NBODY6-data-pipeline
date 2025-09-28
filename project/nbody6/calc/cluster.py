@@ -1,21 +1,21 @@
-from typing import List, Tuple, Union
+from typing import Tuple
 
 import astropy.units as u
 import numpy as np
 import pandas as pd
 from astropy.coordinates import (
-    SkyCoord,
-    CartesianRepresentation,
     CartesianDifferential,
+    CartesianRepresentation,
+    SkyCoord,
     SkyOffsetFrame,
 )
 
-Coord3D = Union[List[float], Tuple[float, float, float], np.ndarray]
+Coordinate3D = Tuple[float, float, float]
 
 
 def calc_half_mass_radius(
     stars_df: pd.DataFrame,
-    center_coords_pc: Coord3D,
+    center_coord_pc: Coordinate3D,
     mass_key: str = "mass",
     x_pc_key: str = "x",
     y_pc_key: str = "y",
@@ -23,7 +23,7 @@ def calc_half_mass_radius(
 ) -> float:
     distances = np.linalg.norm(
         stars_df[[x_pc_key, y_pc_key, z_pc_key]].astype(float).values
-        - np.asarray(center_coords_pc)[np.newaxis, :],
+        - np.asarray(center_coord_pc)[np.newaxis, :],
         axis=1,
     )
     sorted_idx = np.argsort(distances)
@@ -34,7 +34,7 @@ def calc_half_mass_radius(
 
 
 def convert_to_offset_frame(
-    cluster_center_pc: Coord3D,
+    cluster_center_pc: Coordinate3D,
     centered_stars_df: pd.DataFrame,
     x_pc_key: str = "x",
     y_pc_key: str = "y",

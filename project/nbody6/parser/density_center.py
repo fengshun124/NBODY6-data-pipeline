@@ -4,7 +4,7 @@ from typing import Dict, Union
 import numpy as np
 import pandas as pd
 
-from nbody6.load.parser.base import (
+from nbody6.parser.base import (
     FileParserBase,
     FileParserConfig,
     FileBlock,

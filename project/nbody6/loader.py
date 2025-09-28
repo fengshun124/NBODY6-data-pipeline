@@ -3,11 +3,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
-import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
 
-from nbody6.load.parser import (
+from nbody6.calc.summary import summarize_timestamp_stats
+from nbody6.parser import (
     DensityCenterParser,
     FileParserBase,
     Fort19Parser,
@@ -18,21 +18,8 @@ from nbody6.load.parser import (
 )
 
 
-def _calc_timestamp_stats(
-    timestamps: Union[List[float], pd.Series],
-) -> Dict[str, Optional[float]]:
-    if not timestamps:
-        return {"count": 0, "min": None, "max": None, "step": None}
-    return {
-        "count": len(timestamps),
-        "min": min(timestamps),
-        "max": max(timestamps),
-        "step": round(float(np.nanmean(np.diff(timestamps))), 2),
-    }
-
-
 @dataclass(slots=True)
-class SimulationData:
+class NBody6Data:
     root: Path
     # file parsers
     parser_dict: Dict[str, FileParserBase]
@@ -52,20 +39,20 @@ class SimulationData:
         return (
             f"{type(self).__name__}(\n"
             f"    root={self.root!r},\n"
-            f"    timestamp_stats={self.timestamp_stats.items()},\n"
+            f"    timestamp_stats={self.timestamp_stats},\n"
             f"    parsers={parsers_str}\n"
             f")"
         )
 
     @property
     def timestamp_stats(self) -> Dict[str, Dict[str, Optional[float]]]:
-        return _calc_timestamp_stats(self.timestamps)
+        return summarize_timestamp_stats(self.timestamps)
 
     def __getitem__(self, timestamp: float) -> Dict[str, FileParserBase]:
         return {name: parser[timestamp] for name, parser in self.parser_dict.items()}
 
 
-class SimulationDataLoader:
+class NBody6DataLoader:
     def __init__(self, root: Union[str, Path]) -> None:
         self._root = Path(root)
         if not self._root.is_dir():
@@ -81,7 +68,7 @@ class SimulationDataLoader:
         }
         self._validate_file()
 
-        self._simulation_data: Optional[SimulationData] = None
+        self._simulation_data: Optional[NBody6Data] = None
 
     def __repr__(self):
         return f"{type(self).__name__}(root={self._root})"
@@ -98,7 +85,7 @@ class SimulationDataLoader:
         return self._parser_dict
 
     @property
-    def simulation_data(self) -> Optional[SimulationData]:
+    def simulation_data(self) -> Optional[NBody6Data]:
         if self._simulation_data is None:
             warnings.warn(
                 f"[{self._root.name}] Simulation not loaded. Call 'load()' to parse data.",
@@ -112,7 +99,7 @@ class SimulationDataLoader:
         is_verbose: bool = True,
         is_allow_timestamp_trim: bool = False,
         timestamp_tolerance: float = 2e-2,
-    ) -> SimulationData:
+    ) -> NBody6Data:
         if self._simulation_data is not None:
             warnings.warn(
                 f"[{self._root.name}] Reloading simulation data. Previous data will be overwritten.",
@@ -138,6 +125,7 @@ class SimulationDataLoader:
                 self._parser_dict.values(),
                 disable=not is_verbose,
                 dynamic_ncols=True,
+                leave=False,
             )
         ):
             pbar.set_description(f"Loading {parser._path.name}")
@@ -186,7 +174,7 @@ class SimulationDataLoader:
             ]
             if trimmed_timestamp_df.empty:
                 timestamp_stats = {
-                    name: _calc_timestamp_stats(parser.timestamps)
+                    name: summarize_timestamp_stats(parser.timestamps)
                     for name, parser in self._parser_dict.items()
                 }
                 raise ValueError(
@@ -212,7 +200,7 @@ class SimulationDataLoader:
                 if src_ts != ref_ts:
                     parser.update_timestamp(float(src_ts), float(ref_ts))
 
-        self._simulation_data = SimulationData(
+        self._simulation_data = NBody6Data(
             root=self._root,
             parser_dict=self._parser_dict,
             timestamps=ref_timestamps,
