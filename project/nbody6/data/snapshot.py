@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, Optional, Tuple, Union
 
+import joblib
 import numpy as np
 import pandas as pd
 
@@ -93,6 +94,14 @@ class Snapshot:
         with open(filepath, "wb") as f:
             pickle.dump(self.to_dict(is_materialize=True), f)
 
+    def to_joblib(
+        self, filepath: Union[str, Path], enforce_overwrite: bool = False
+    ) -> None:
+        filepath = Path(filepath).resolve()
+        if filepath.exists() and not enforce_overwrite:
+            raise FileExistsError(f"{filepath} already exists.")
+        joblib.dump(self.to_dict(is_materialize=False), filepath, compress=3)
+
     @classmethod
     def from_dict(cls, data: Dict) -> "Snapshot":
         return cls(
@@ -111,6 +120,12 @@ class Snapshot:
         filepath = Path(filepath)
         with open(filepath, "rb") as f:
             data = pickle.load(f)
+        return cls.from_dict(data)
+
+    @classmethod
+    def from_joblib(cls, filepath: Union[str, Path]) -> "Snapshot":
+        filepath = Path(filepath)
+        data = joblib.load(filepath)
         return cls.from_dict(data)
 
     # overall summary statistics

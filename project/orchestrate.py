@@ -11,7 +11,8 @@ from nbody6.data import SnapshotSeries, SnapshotSeriesCollection
 from nbody6.loader import NBody6DataLoader
 from nbody6.observer import PseudoObserver
 
-SIM_ROOT_BASE = Path("../../data/NBody6/library").resolve()
+SIM_ROOT_BASE = Path("../../data").resolve()
+OUTPUT_BASE = Path("../output")
 SIM_ATTR_PATTERN = re.compile(r"Rad(\d{2})/zmet(\d{4})/M(\d)/(\d{4})")
 
 
@@ -68,12 +69,11 @@ def prepare(
     log_file: str,
 ) -> None:
     # prepare export directories
-    output_dir = Path("../output")
-    cached_raw_series_dir = output_dir / "cache" / "raw"
-    cached_obs_series_dir = output_dir / "cache" / "obs"
-    log_dir = output_dir / "logs"
-    summary_dir = output_dir / "summary"
-    binary_annular_stats_dir = output_dir / "binary_stats"
+    cached_raw_series_dir = OUTPUT_BASE / "cache" / "raw"
+    cached_obs_series_dir = OUTPUT_BASE / "cache" / "obs"
+    log_dir = OUTPUT_BASE / "logs"
+    summary_dir = OUTPUT_BASE / "summary"
+    binary_annular_stats_dir = OUTPUT_BASE / "binary_stats"
     for path in [
         cached_raw_series_dir,
         cached_obs_series_dir,
@@ -87,7 +87,7 @@ def prepare(
     # preparing data
     try:
         logging.debug(f"[{sim_exp_label}] Start processing {sim_path}")
-        cached_raw_series = cached_raw_series_dir / f"{sim_exp_label}-raw.pkl"
+        cached_raw_series = cached_raw_series_dir / f"{sim_exp_label}-raw.joblib"
 
         # load and assemble N-Body6 data
         if cached_raw_series.is_file():
@@ -105,7 +105,7 @@ def prepare(
             snapshot_series = assembler.assemble_all(is_strict=False)
             logging.debug(f"[{sim_exp_label}] Assembled {assembler}")
 
-            snapshot_series.to_pickle(cached_raw_series)
+            snapshot_series.to_joblib(cached_raw_series)
 
             logging.debug(
                 f"[{sim_exp_label}] Cached SnapshotSeries to {cached_raw_series}"
@@ -130,7 +130,7 @@ def prepare(
         gc.collect()
 
         # pseudo-observe the raw data
-        cached_obs_series = cached_obs_series_dir / f"{sim_exp_label}-obs.pkl"
+        cached_obs_series = cached_obs_series_dir / f"{sim_exp_label}-obs.joblib"
         if cached_obs_series.is_file():
             logging.debug(
                 f"[{sim_exp_label}] Loading cached observed SnapshotSeries from {cached_obs_series}"
@@ -153,7 +153,7 @@ def prepare(
                 f"{len(obs_series_collection.series_dict)} series"
             )
 
-            obs_series_collection.to_pickle(cached_obs_series)
+            obs_series_collection.to_joblib(cached_obs_series)
             logging.debug(
                 f"[{sim_exp_label}] Cached observed SnapshotSeries to {cached_obs_series}"
             )
@@ -216,7 +216,7 @@ def prepare_all() -> None:
 def prepare_test(sim_exp_label) -> None:
     if (
         cache_raw_series := Path(
-            f"./output/cache/raw/{sim_exp_label}-raw.pkl"
+            OUTPUT_BASE / f"./cache/raw/{sim_exp_label}-raw.joblib"
         ).resolve()
     ).is_file():
         snapshot_series = SnapshotSeries.from_pickle(cache_raw_series)

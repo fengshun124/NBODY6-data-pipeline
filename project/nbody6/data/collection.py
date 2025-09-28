@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Callable, Dict, Iterator, List, Optional, Tuple, Union
 
 import pandas as pd
+import joblib
 
 from nbody6.calc.cluster import Coordinate3D
 from nbody6.calc.summary import summarize_timestamp_stats
@@ -13,7 +14,7 @@ from nbody6.data.snapshot import Snapshot
 
 @dataclass(slots=True)
 class SnapshotSeriesCollection:
-    series_dict: Dict[Tuple[float, float, float], SnapshotSeries]
+    series_dict: Dict[Coordinate3D, SnapshotSeries]
 
     _cache_summary: Optional[pd.DataFrame] = field(default=None, init=False, repr=False)
     _cache_binary_annular: Optional[pd.DataFrame] = field(
@@ -137,6 +138,14 @@ class SnapshotSeriesCollection:
         with open(filepath, "wb") as f:
             pickle.dump(self.to_dict(is_materialize=True), f)
 
+    def to_joblib(
+        self, filepath: Union[str, Path], enforce_overwrite: bool = False
+    ) -> None:
+        filepath = Path(filepath).resolve()
+        if filepath.exists() and not enforce_overwrite:
+            raise FileExistsError(f"{filepath} already exists.")
+        joblib.dump(self.to_dict(is_materialize=False), filepath, compress=3)
+
     @classmethod
     def from_dict(cls, data: Dict) -> "SnapshotSeriesCollection":
         return cls(
@@ -151,6 +160,12 @@ class SnapshotSeriesCollection:
         filepath = Path(filepath)
         with open(filepath, "rb") as f:
             data = pickle.load(f)
+        return cls.from_dict(data)
+
+    @classmethod
+    def from_joblib(cls, filepath: Union[str, Path]) -> "SnapshotSeriesCollection":
+        filepath = Path(filepath)
+        data = joblib.load(filepath)
         return cls.from_dict(data)
 
     # overall summary
