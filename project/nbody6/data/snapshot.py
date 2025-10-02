@@ -189,136 +189,123 @@ class Snapshot:
                 }
             )
 
-        return pd.DataFrame([stats_dict])
+        return pd.DataFrame([stats_dict]).assign(
+            r_tidal=self.header["r_tidal"], r_half_mass=self.header["r_half_mass"]
+        )
 
     # binary annular statistics
     @property
-    def binary_annular_statistics(self) -> pd.DataFrame:
+    def annular_statistics(self) -> pd.DataFrame:
         if self._cache_binary_annular is None:
-            self._cache_binary_annular = self._compute_binary_annular_statistics()
+            self._cache_binary_annular = self._compute_annular_statistics()
         return self._cache_binary_annular
 
-    def _compute_binary_annular_statistics(self) -> pd.DataFrame:
+    def _compute_annular_statistics(self) -> pd.DataFrame:
         if self.binary_systems.empty:
             return pd.DataFrame()
 
-        stars_df = (
-            self.stars[self.stars.get("is_within_2x_r_tidal", True)].copy()
-            if not self.stars.empty
-            else self.stars
-        )
-        bin_sys_df = self.binary_systems[
-            self.binary_systems.get("is_within_2x_r_tidal", True)
-        ].copy()
+        stars_df = self.stars.copy()
+        bin_sys_df = self.binary_systems.copy()
 
-        agg_policy_dict = {
-            "n_binary": lambda df: len(df),
-            "n_wide_binary": lambda df: int(df["is_wide_binary"].sum())
-            if not df.empty
-            else 0,
-            "n_hard_binary": lambda df: int(df["is_hard_binary"].sum())
-            if not df.empty
-            else 0,
+        if stars_df.empty and bin_sys_df.empty:
+            return pd.DataFrame()
+
+        # mark stars that are not in any binary pairs
+        binary_pairs = set(bin_sys_df["pair"])
+        stars_df["is_binary"] = stars_df["hierarchy"].apply(
+            lambda h: any(pair in h for pair in binary_pairs)
+        )
+
+        bin_sys_stats_policy = {
+            "n_binary": ("pair", "size"),
+            **{
+                f"n_{bin_type}_binary": (f"is_{bin_type}_binary", "sum")
+                for bin_type in ["wide", "hard", "unresolved"]
+                if f"is_{bin_type}_binary" in bin_sys_df.columns
+            },
+        }
+        star_stats_policy = {
+            "n_single": ("is_binary", lambda s: (~s).sum()),
+            "n_binary_star": ("is_binary", "sum"),
         }
 
-        stats_df_dict = {}
+        stats_dfs = []
         for dist_key in ["dist_dc_r_tidal", "dist_dc_r_half_mass"]:
-            if stars_df.empty and bin_sys_df.empty:
-                stats_df_dict[dist_key] = pd.DataFrame(
-                    columns=["rmin", "rmax", *agg_policy_dict.keys(), "n_singles"]
-                ).assign(dist_key=dist_key)
+            if dist_key not in stars_df.columns or dist_key not in bin_sys_df.columns:
                 continue
 
-            max_r = int(
-                np.ceil(
-                    max(
-                        float(stars_df[dist_key].max()) if not stars_df.empty else 0.0,
-                        float(bin_sys_df[dist_key].max())
-                        if not bin_sys_df.empty
-                        else 0.0,
-                    )
-                )
+            max_dist = max(
+                stars_df[dist_key].max() if not stars_df.empty else 0,
+                bin_sys_df[dist_key].max() if not bin_sys_df.empty else 0,
             )
-            distance_bins = np.arange(0, max_r + 1, 1, dtype=float)
+            dist_bins = np.arange(0, int(np.ceil(max_dist)) + 1, 1)
 
-            bin_stats_df = self._annular_stats(
-                distance_bins=distance_bins,
-                data_df=bin_sys_df,
-                dist_key=dist_key,
-                agg_policy_dict=agg_policy_dict,
-            )
-
-            single_star_df = (
-                stars_df[~stars_df.get("is_binary", False)]
-                if not stars_df.empty
-                else pd.DataFrame()
-            )
-            if not single_star_df.empty:
-                single_stat_df = (
-                    single_star_df.assign(
+            bin_sys_stats_df = (
+                (
+                    bin_sys_df.assign(
                         _bin=pd.cut(
-                            single_star_df[dist_key],
-                            bins=distance_bins,
+                            bin_sys_df[dist_key],
+                            dist_bins,
                             right=True,
                             include_lowest=True,
                         )
                     )
                     .groupby("_bin", observed=True)
-                    .size()
-                    .reset_index(name="n_singles")
-                    .assign(
-                        rmin=lambda df: df["_bin"].apply(
-                            lambda x: int(np.round(x.left))
-                        ),
-                        rmax=lambda df: df["_bin"].apply(
-                            lambda x: int(np.round(x.right))
-                        ),
-                    )
-                    .drop(columns=["_bin"])
+                    .agg(**bin_sys_stats_policy)
+                    .reset_index()
                 )
-            else:
-                single_stat_df = pd.DataFrame(columns=["rmin", "rmax", "n_singles"])
-
-            stats_df_dict[dist_key] = (
-                pd.merge(bin_stats_df, single_stat_df, on=["rmin", "rmax"], how="left")
-                .fillna({"n_singles": 0})
-                .astype({"n_singles": int})
-                .assign(dist_key=dist_key)
-                .sort_values(["rmin", "rmax"], ignore_index=True)
+                if not bin_sys_df.empty
+                else pd.DataFrame()
             )
 
-        return pd.concat(
-            list(stats_df_dict.values()), keys=stats_df_dict.keys(), ignore_index=True
+            star_stats_df = (
+                stars_df.assign(
+                    _bin=pd.cut(
+                        stars_df[dist_key], dist_bins, right=True, include_lowest=True
+                    )
+                )
+                .groupby("_bin", observed=True)
+                .agg(**star_stats_policy)
+                .reset_index()
+            )
+
+            stats_df = (
+                pd.merge(bin_sys_stats_df, star_stats_df, on="_bin", how="outer")
+                .assign(
+                    radius=lambda df: df["_bin"].apply(lambda x: x.right).astype(int),
+                    dist_key=dist_key,
+                    n_star=lambda df: df["n_single"].fillna(0)
+                    + df["n_binary_star"].fillna(0),
+                )
+                .drop("_bin", axis=1)
+                .fillna(0)
+            )
+
+            count_cols = [col for col in stats_df.columns if col.startswith("n_")]
+            stats_df[count_cols] = stats_df[count_cols].astype(int)
+            stats_dfs.append(stats_df)
+
+        if not stats_dfs:
+            return pd.DataFrame()
+
+        full_stats_df = pd.concat(stats_dfs, ignore_index=True)
+
+        base_cols = [
+            "dist_key",
+            "radius",
+            "n_star",
+            "n_single",
+            "n_binary_star",
+            "n_binary",
+        ]
+        other_cols = [c for c in full_stats_df.columns if c not in base_cols]
+        col_order = base_cols + sorted(other_cols)
+
+        return (
+            full_stats_df[[c for c in col_order if c in full_stats_df.columns]]
+            .sort_values(["dist_key", "radius"])
+            .reset_index(drop=True)
         )
-
-    @staticmethod
-    def _annular_stats(
-        distance_bins: np.ndarray,
-        data_df: pd.DataFrame,
-        dist_key: str,
-        agg_policy_dict: dict,
-    ) -> pd.DataFrame:
-        if data_df.empty:
-            # return empty with expected schema
-            cols = ["rmin", "rmax", *agg_policy_dict.keys()]
-            return pd.DataFrame(columns=cols)
-
-        data_df = data_df.copy()
-        data_df["_bin"] = pd.cut(
-            data_df[dist_key], bins=distance_bins, right=True, include_lowest=True
-        )
-
-        results = []
-        for bin_interval, df_bin in data_df.groupby("_bin", observed=True):
-            row = {
-                "rmin": int(np.round(bin_interval.left)),
-                "rmax": int(np.round(bin_interval.right)),
-            }
-            for name, func in agg_policy_dict.items():
-                row[name] = func(df_bin) if len(df_bin) > 0 else 0
-            results.append(row)
-
-        return pd.DataFrame(results)
 
 
 @dataclass(slots=True)

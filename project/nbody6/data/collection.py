@@ -3,8 +3,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, Iterator, List, Optional, Tuple, Union
 
-import pandas as pd
 import joblib
+import pandas as pd
 
 from nbody6.calc.cluster import Coordinate3D
 from nbody6.calc.summary import summarize_timestamp_stats
@@ -196,18 +196,18 @@ class SnapshotSeriesCollection:
 
     # binary annular statistics
     @property
-    def binary_annular_statistics(self) -> pd.DataFrame:
+    def annular_statistics(self) -> pd.DataFrame:
         if self._cache_binary_annular is None:
-            self._cache_binary_annular = self._compute_binary_annular_statistics()
+            self._cache_binary_annular = self._compute_annular_statistics()
         return self._cache_binary_annular
 
-    def _compute_binary_annular_statistics(self) -> pd.DataFrame:
+    def _compute_annular_statistics(self) -> pd.DataFrame:
         if not self.series_dict:
             return pd.DataFrame()
 
         results = []
         for coord, series in self.series_dict.items():
-            stats = series.binary_annular_statistics
+            stats = series.annular_statistics
             if stats is None or stats.empty:
                 continue
             stats_df = stats.copy()

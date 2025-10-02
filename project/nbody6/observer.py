@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -95,114 +95,105 @@ class PseudoObserver:
         pseudo_obs_coord: Coordinate3D,
     ) -> pd.DataFrame:
         if unresolved_bin_sys_df.empty:
-            return pd.DataFrame(columns=["name"]).assign(
-                is_binary=True, is_unresolved_binary=True
-            )
+            return pd.DataFrame()
 
-        # Build once; memoize to avoid duplicate merges
-        arr = unresolved_bin_sys_df[["pair", "obj1_ids", "obj2_ids"]].to_numpy()
-        pair_map = {
-            tuple(sorted(((o1 or []) + (o2 or [])))): (pair, o1, o2)
-            for pair, o1, o2 in arr
-        }
-        memo: Dict[Tuple[int, ...], Dict[str, float]] = {}
-
-        def resolve(ids: List[int]) -> Dict[str, float]:
-            key = tuple(sorted(ids))
-            if key in memo:
-                return memo[key]
-            if len(key) == 1:
-                res = name_attr_map[key[0]]
-            elif key in pair_map:
-                _, left_ids, right_ids = pair_map[key]
-                res = self._merge_unresolved_binaries(
-                    resolve(left_ids), resolve(right_ids), header_dict
-                )
-            else:
-                acc = name_attr_map[key[0]]
-                for sid in key[1:]:
-                    acc = self._merge_unresolved_binaries(
-                        acc, name_attr_map[sid], header_dict
-                    )
-                res = acc
-            memo[key] = res
-            return res
-
-        rows = [
-            {
-                "name": pair,
-                **resolve((o1 or []) + (o2 or [])),
-            }
-            for pair, o1, o2 in arr
+        member_sets = [
+            frozenset(ids1 + ids2)
+            for ids1, ids2 in unresolved_bin_sys_df[["obj1_ids", "obj2_ids"]].to_numpy()
         ]
 
+        top_level_idx = [
+            idx
+            for idx, members in enumerate(member_sets)
+            if not any(
+                members < other for j, other in enumerate(member_sets) if j != idx
+            )
+        ]
+
+        component_cache: Dict[Tuple[int, ...], Dict[str, float]] = {}
+
+        def _fetch_attrs(obj_ids: List[int]) -> Dict[str, float]:
+            key = tuple(sorted(obj_ids))
+            if len(key) == 1:
+                return dict(name_attr_map[key[0]])
+            if len(key) == 2:
+                if key not in component_cache:
+                    left = _fetch_attrs([key[0]])
+                    right = _fetch_attrs([key[1]])
+                    component_cache[key] = self._merge_unresolved_binaries(
+                        star1_attr_dict=left,
+                        star2_attr_dict=right,
+                        header_dict=header_dict,
+                    )
+                return dict(component_cache[key])
+            raise ValueError(f"Unsupported unresolved component size: {obj_ids}")
+
+        records = [
+            (
+                lambda merged_attr, top_set, pair_name: merged_attr.update(
+                    {
+                        "name": pair_name,
+                        "hierarchy": list(
+                            dict.fromkeys(
+                                [str(obj_id) for obj_id in sorted(top_set)]
+                                + [
+                                    unresolved_bin_sys_df.iloc[j]["pair"]
+                                    for j, members in enumerate(member_sets)
+                                    if members.issubset(top_set)
+                                ]
+                            )
+                        ),
+                        "is_multi_system": len(top_set) > 3,
+                    }
+                )
+                or merged_attr
+            )(
+                self._merge_unresolved_binaries(
+                    star1_attr_dict=_fetch_attrs(
+                        unresolved_bin_sys_df.iloc[idx]["obj1_ids"]
+                    ),
+                    star2_attr_dict=_fetch_attrs(
+                        unresolved_bin_sys_df.iloc[idx]["obj2_ids"]
+                    ),
+                    header_dict=header_dict,
+                ),
+                member_sets[idx],
+                unresolved_bin_sys_df.iloc[idx]["pair"],
+            )
+            for idx in top_level_idx
+        ]
+
+        if not records:
+            return pd.DataFrame()
+
+        # return pd.DataFrame.from_records(records)
         return convert_to_offset_frame(
             cluster_center_pc=pseudo_obs_coord,
-            centered_stars_df=pd.DataFrame.from_records(rows),
+            centered_stars_df=pd.DataFrame.from_records(records),
         ).assign(is_binary=True, is_unresolved_binary=True)
 
     def _observe(
         self, coordinate: Coordinate3D, snapshot: Snapshot
     ) -> PseudoObservedSnapshot:
         # pre-filter to 2x r_tidal
-        stars_df = snapshot.stars.loc[snapshot.stars["is_within_2x_r_tidal"]].copy()
+        stars_df = snapshot.stars[snapshot.stars["is_within_2x_r_tidal"]].copy()
         bin_sys_df = snapshot.binary_systems.loc[
             snapshot.binary_systems["is_within_2x_r_tidal"]
         ].copy()
 
-        # Keep only pairs whose ALL members are present among filtered stars
-        if not bin_sys_df.empty:
-            valid_names = set(stars_df["name"])
-            member_ok = bin_sys_df.apply(
-                lambda r: set((r["obj1_ids"] or []) + (r["obj2_ids"] or [])).issubset(
-                    valid_names
-                ),
-                axis=1,
-            )
-            bin_sys_df = bin_sys_df.loc[member_ok].copy()
+        # update hierarchy, is_binary, is_multi_system
+        binary_pairs = set(bin_sys_df["pair"])
+        stars_df["hierarchy"] = stars_df["hierarchy"].apply(
+            lambda h: [p for p in h if p in binary_pairs or "+" not in p]
+        )
+        stars_df["is_binary"] = stars_df["hierarchy"].str.len() > 1
+        stars_df["is_multi_system"] = stars_df["hierarchy"].str.len() > 2
 
-            # Rebuild hierarchy with "levels":
-            # [star_name, ...pairs that include the star], pairs ordered from smaller to larger system
-            if not bin_sys_df.empty:
-                tmp = bin_sys_df.assign(
-                    members=(bin_sys_df["obj1_ids"] + bin_sys_df["obj2_ids"])
-                )
-                tmp = tmp.assign(member_count=tmp["members"].str.len())
-
-                # Explode by primitive members and sort by member_count to ensure levels from small→large
-                exploded = tmp.explode("members")[["members", "pair", "member_count"]]
-                exploded = exploded.sort_values("member_count", kind="mergesort")
-                pairs_by_member: Dict[Union[int, str], List[str]] = (
-                    exploded.groupby("members")["pair"].agg(list).to_dict()
-                )
-
-                # Assign hierarchy = [name] + pairs(in order)
-                # If star has no pairs, hierarchy becomes [name]
-                names = stars_df["name"].to_numpy()
-                stars_df["hierarchy"] = [
-                    [n] + pairs_by_member.get(n, []) for n in names
-                ]
-            else:
-                # no valid pairs left → everyone is single: [name]
-                stars_df["hierarchy"] = [[n] for n in stars_df["name"]]
-        else:
-            # bin_sys_df empty → leave only [name]
-            stars_df["hierarchy"] = [
-                (h if isinstance(h, list) and len(h) > 0 else [n])
-                for h, n in zip(stars_df["hierarchy"], stars_df["name"])
-            ]
-
-        # Binary / multi-system membership based on levels length
-        # binary: has at least one pair -> len>=2 ; multi-system: more than one pair level -> len>2
-        hlen = stars_df["hierarchy"].map(len)
-        stars_df["is_binary"] = (hlen >= 2).astype(bool)
-        stars_df["is_in_multiple_system"] = (hlen > 2).astype(bool)
-
-        # observer frame (distances etc. used later are computed after this transform)
         stars_df = convert_to_offset_frame(
             cluster_center_pc=coordinate, centered_stars_df=stars_df
         )
 
+        # build name -> attr dict map for fast lookup
         name_attr_map: Dict[Union[int, str], Dict[str, float]] = stars_df.set_index(
             "name"
         ).to_dict(orient="index")
@@ -212,44 +203,43 @@ class PseudoObserver:
             stars_df[~stars_df["is_binary"]].copy().assign(is_unresolved_binary=False)
         )
 
-        # Resolvability and resolved set
+        # resolvability and resolved set
         if not bin_sys_df.empty:
-            obs_dist_map = stars_df.set_index("name")["dist_pc"].to_dict()
-            # mean of observed distances of all components
-            arr = bin_sys_df[["obj1_ids", "obj2_ids", "semi"]].to_numpy()
-            obs_dist_pc = [
-                float(np.mean([obs_dist_map[i] for i in (o1 + o2)]))
-                for o1, o2, _ in arr
-            ]
             bin_sys_df = bin_sys_df.copy()
-            bin_sys_df["obs_dist_pc"] = obs_dist_pc
+            obs_dist_map = stars_df.set_index("name")["dist_pc"].to_dict()
+
+            # mean of observed distances of all components
+            bin_sys_df["obs_dist_pc"] = [
+                float(np.mean([obs_dist_map[i] for i in (obj1_ids + obj2_ids)]))
+                for obj1_ids, obj2_ids in bin_sys_df[
+                    ["obj1_ids", "obj2_ids"]
+                ].to_numpy()
+            ]
             bin_sys_df["is_unresolved_binary"] = (
                 bin_sys_df["semi"]
                 <= bin_sys_df["obs_dist_pc"] * self.UNRESOLVED_SEP_FACTOR
             )
 
             # names participating in resolved systems
-            resolved_names = set(
-                m
-                for o1, o2 in bin_sys_df.loc[
-                    ~bin_sys_df["is_unresolved_binary"], ["obj1_ids", "obj2_ids"]
-                ].to_numpy()
-                for m in (o1 + o2)
+            resolved_star_names = set(
+                bin_sys_df[~bin_sys_df["is_unresolved_binary"]][
+                    ["obj1_ids", "obj2_ids"]
+                ]
+                .stack()
+                .explode()
             )
         else:
             bin_sys_df["is_unresolved_binary"] = pd.Series(dtype=bool)
-            resolved_names = set()
+            resolved_star_names = set()
 
         resolved_stars_df = (
-            stars_df[stars_df["name"].isin(resolved_names)]
+            stars_df[stars_df["name"].isin(resolved_star_names)]
             .copy()
             .assign(is_unresolved_binary=False, is_binary=True)
         )
 
-        # Unresolved systems -> merged photocenters
-        unresolved_bin_sys_df = bin_sys_df.loc[
-            bin_sys_df["is_unresolved_binary"]
-        ].copy()
+        # unresolved systems -> merged measurements
+        unresolved_bin_sys_df = bin_sys_df[bin_sys_df["is_unresolved_binary"]].copy()
         unresolved_stars_df = self._merge_unresolved_systems(
             unresolved_bin_sys_df=unresolved_bin_sys_df,
             name_attr_map=name_attr_map,
@@ -261,13 +251,21 @@ class PseudoObserver:
             time=snapshot.time,
             header=snapshot.header,
             sim_galactic_center=coordinate,
-            raw_stars=snapshot.stars,
-            raw_binary_systems=snapshot.binary_systems,
             stars=pd.concat(
                 [single_stars_df, resolved_stars_df, unresolved_stars_df],
                 ignore_index=True,
+            ).pipe(
+                lambda df: df[
+                    ["name"]
+                    + [c for c in df.columns if c.startswith("is_")]
+                    + [c for c in df.columns if not c.startswith("is_") and c != "name"]
+                ]
             ),
-            binary_systems=bin_sys_df,
+            binary_systems=bin_sys_df.sort_values(["obj1_ids", "obj2_ids"]).reset_index(
+                drop=True
+            ),
+            raw_stars=snapshot.stars,
+            raw_binary_systems=snapshot.binary_systems,
         )
 
     def observe(
@@ -275,15 +273,14 @@ class PseudoObserver:
         coordinates: Union[Coordinate3D, List[Coordinate3D]],
         is_verbose: bool = True,
     ) -> SnapshotSeriesCollection:
-        # normalize to a list of tuple coords so keys are hashable
         if (
             isinstance(coordinates, list)
             and len(coordinates) > 0
-            and isinstance(coordinates[0], (list, tuple))
+            and all(isinstance(c, (list, tuple)) for c in coordinates)
         ):
-            coord_list: List[Coordinate3D] = [tuple(c) for c in coordinates]  # type: ignore
+            coord_list: List[Coordinate3D] = [tuple(c) for c in coordinates]
         else:
-            coord_list = [tuple(coordinates)]  # type: ignore
+            coord_list = [tuple(coordinates)]
 
         obs_series_dict: Dict[Coordinate3D, SnapshotSeries] = {}
 
@@ -307,15 +304,13 @@ class PseudoObserver:
                 )
             ):
                 ts_pbar.set_description(f"Processing Snapshot@{ts:.2f}Myr")
-                key = self._cache_key(
-                    coord, ts
-                )  # _cache_key already tuples/float-casts
-                if key not in self._cache_obs_snapshot_dict:
-                    # pass the tuple coord through; _observe accepts Coordinate3D just fine
+
+                if (
+                    key := self._cache_key(coord, ts)
+                ) not in self._cache_obs_snapshot_dict:
                     self._cache_obs_snapshot_dict[key] = self._observe(coord, snapshot)
                 obs_snapshot_dict[ts] = self._cache_obs_snapshot_dict[key]
 
-            # IMPORTANT: use the tuple `coord` as the dict key (hashable)
             obs_series_dict[coord] = SnapshotSeries(snapshot_dict=obs_snapshot_dict)
 
         self._cache_series_collection = SnapshotSeriesCollection(

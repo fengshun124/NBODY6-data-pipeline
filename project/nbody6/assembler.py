@@ -518,6 +518,30 @@ class SnapshotAssembler:
         )
 
         if not binary_systems_df.empty:
+            full_star_names = set(stars_df["name"])
+            full_binary_star_names = set(
+                binary_systems_df[["obj1_ids", "obj2_ids"]].sum().sum()
+            )
+
+            if missing_names := sorted(list(full_binary_star_names - full_star_names)):
+                exception_msg = (
+                    f"[{timestamp} Myr] Names {missing_names} from binary pairing info (OUT9/fort.19) "
+                    "are missing from the star catalog (built from OUT34/fort.82/fort.83)."
+                )
+                if is_strict:
+                    raise ValueError(exception_msg)
+                else:
+                    warnings.warn(exception_msg + " Dropping affected binary entries.")
+                    binary_systems_df = binary_systems_df[
+                        binary_systems_df.apply(
+                            lambda row: all(
+                                name in full_star_names
+                                for name in row["obj1_ids"] + row["obj2_ids"]
+                            ),
+                            axis=1,
+                        )
+                    ].reset_index(drop=True)
+
             star_pair_df = (
                 binary_systems_df[["pair", "obj1_ids", "obj2_ids"]]
                 .assign(all_ids=lambda df: df["obj1_ids"] + df["obj2_ids"])

@@ -153,18 +153,18 @@ class SnapshotSeries:
 
     # binary annular statistics
     @property
-    def binary_annular_statistics(self) -> pd.DataFrame:
+    def annular_statistics(self) -> pd.DataFrame:
         if self._cache_binary_annular is None:
-            self._cache_binary_annular = self._compute_binary_annular_statistics()
+            self._cache_binary_annular = self._compute_annular_statistics()
         return self._cache_binary_annular
 
-    def _compute_binary_annular_statistics(self) -> pd.DataFrame:
+    def _compute_annular_statistics(self) -> pd.DataFrame:
         if not self.snapshot_dict:
             return pd.DataFrame()
 
         results = []
         for t, snapshot in self:
-            stats = snapshot.binary_annular_statistics
+            stats = snapshot.annular_statistics
             if stats is None or stats.empty:
                 continue
             df = stats.copy()
