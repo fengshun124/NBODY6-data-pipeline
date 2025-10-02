@@ -129,7 +129,6 @@ def process(
 
         # export summary_df & bin_stats_df
         summary_df = series_collection.summary.copy()
-        breakpoint()
         annular_stats_df = series_collection.annular_statistics.copy()
 
         for k, v in sim_attr_dict.items():
@@ -156,17 +155,17 @@ def process_all(log_file="batch.log"):
             log_file=log_file,
         )
 
-    Parallel(n_jobs=10)(
+    Parallel(n_jobs=120)(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
         if attr_dict["init_mass_lv"] in [5, 6, 7, 8]
     )
-    Parallel(n_jobs=2)(
+    Parallel(n_jobs=30)(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
         if attr_dict["init_mass_lv"] in [2, 3, 4]
     )
-    Parallel(n_jobs=1)(
+    Parallel(n_jobs=15)(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
         if attr_dict["init_mass_lv"] in [1]

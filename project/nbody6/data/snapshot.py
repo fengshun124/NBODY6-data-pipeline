@@ -33,6 +33,19 @@ class Snapshot:
         default=None, init=False, repr=False
     )
 
+    def __post_init__(self):
+        # ensure ALL entries are not NaN
+        for df_name, df in [
+            ("stars", self.stars),
+            ("binary_systems", self.binary_systems),
+        ]:
+            if df.isnull().values.any():
+                nan_cols = df.columns[df.isnull().any()].tolist()
+                raise ValueError(
+                    f"DataFrame {df_name} contains NaN values in columns: "
+                    f"{', '.join(nan_cols)}."
+                )
+
     # cache management
     def _clear_cache(self):
         self._cache_summary = None

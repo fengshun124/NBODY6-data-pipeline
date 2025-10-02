@@ -243,8 +243,8 @@ class SnapshotAssembler:
         dist_dc_map: Dict[int, Dict[str, float]],
     ) -> Tuple[pd.DataFrame, Dict[str, Union[int, float]]]:
         # generate hierarchical pair name
-        def _label_hierarchy(obj1_ids: List[int], obj2_ids: List[int]) -> str:
-            def _format_ids(ids: List[int]) -> str:
+        def _label_hierarchy(obj1_ids: Union[List[int], Tuple[int, ...]], obj2_ids: Union[List[int], Tuple[int, ...]]) -> str:
+            def _format_ids(ids: Union[List[int], Tuple[int, ...]]) -> str:
                 return (
                     "(" + "+".join(map(str, sorted(map(int, ids)))) + ")"
                     if len(ids) != 1
@@ -328,17 +328,15 @@ class SnapshotAssembler:
         )
         if full_bin_sys_df.empty:
             warnings.warn(f"[{timestamp} Myr] No binary systems found.")
-            return pd.DataFrame(
-                columns=self._BINARY_PAIR_KEYS
-            ), {}  # Fixed: return empty dict
+            return pd.DataFrame(columns=self._BINARY_PAIR_KEYS), {}
 
         full_bin_sys_df = (
             full_bin_sys_df.assign(
                 obj1_ids=full_bin_sys_df["obj1_name"].map(
-                    lambda x: reg_bin_name_map.get(x, [x])
+                    lambda x: tuple(reg_bin_name_map.get(x, [x]))
                 ),
                 obj2_ids=full_bin_sys_df["obj2_name"].map(
-                    lambda x: reg_bin_name_map.get(x, [x])
+                    lambda x: tuple(reg_bin_name_map.get(x, [x]))
                 ),
             )
             .assign(
