@@ -9,12 +9,12 @@ axes.labelpad: 8
 xtick.direction: in
 xtick.top: True
 xtick.bottom: True
-xtick.labelsize: 14
+xtick.labelsize: 16
 
 ytick.direction: in
 ytick.left: True
 ytick.right: True
-ytick.labelsize: 14
+ytick.labelsize: 16
 
 xtick.major.size: 6
 xtick.major.width: 1.6

@@ -154,10 +154,10 @@ class Snapshot:
         ) -> Dict[str, float]:
             stats = {
                 "n_star": len(stars_df),
-                "n_binaries": int(stars_df["is_binary"].sum())
+                "n_binary_star": int(stars_df["is_binary"].sum())
                 if not stars_df.empty
                 else 0,
-                "n_binary_systems": len(bin_sys_df),
+                "n_binary_system": len(bin_sys_df),
                 "total_mass": float(stars_df["mass"].sum())
                 if not stars_df.empty
                 else 0.0,
@@ -230,9 +230,9 @@ class Snapshot:
         )
 
         bin_sys_stats_policy = {
-            "n_binary": ("pair", "size"),
+            "n_binary_system": ("pair", "size"),
             **{
-                f"n_{bin_type}_binary": (f"is_{bin_type}_binary", "sum")
+                f"n_{bin_type}_binary_system": (f"is_{bin_type}_binary", "sum")
                 for bin_type in ["wide", "hard", "unresolved"]
                 if f"is_{bin_type}_binary" in bin_sys_df.columns
             },
@@ -309,7 +309,7 @@ class Snapshot:
             "n_star",
             "n_single",
             "n_binary_star",
-            "n_binary",
+            "n_binary_system",
         ]
         other_cols = [c for c in full_stats_df.columns if c not in base_cols]
         col_order = base_cols + sorted(other_cols)
