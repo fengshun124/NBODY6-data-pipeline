@@ -15,8 +15,8 @@ class SnapshotSeries:
     snapshot_dict: Dict[float, Snapshot]
 
     # caches
-    _cache_summary: Optional[pd.DataFrame] = field(default=None, init=False, repr=False)
-    _cache_binary_annular: Optional[pd.DataFrame] = field(
+    _cache_stats: Optional[pd.DataFrame] = field(default=None, init=False, repr=False)
+    _cache_bin_annular_stats: Optional[pd.DataFrame] = field(
         default=None, init=False, repr=False
     )
 
@@ -35,8 +35,8 @@ class SnapshotSeries:
 
     # caching and invalidation
     def _clear_cache(self):
-        self._cache_summary = None
-        self._cache_binary_annular = None
+        self._cache_stats = None
+        self._cache_bin_annular_stats = None
         # bubble up
         if self._parent_invalidator is not None:
             self._parent_invalidator()
@@ -132,42 +132,47 @@ class SnapshotSeries:
         data = joblib.load(filepath)
         return cls.from_dict(data)
 
-    # overall summary
+    # overall statistics
     @property
-    def summary(self) -> pd.DataFrame:
-        if self._cache_summary is None:
-            self._cache_summary = self._summarize()
-        return self._cache_summary
+    def statistics(self) -> pd.DataFrame:
+        if self._cache_stats is None:
+            self._cache_stats = self._calc_stats()
+        return self._cache_stats
 
-    def _summarize(self) -> pd.DataFrame:
-        def _summarize_snapshot():
-            for t, s in sorted(self.snapshot_dict.items()):
-                snapshot_summary = s.summary.copy()
-                snapshot_summary.insert(0, "timestamp", t)
-                yield snapshot_summary
-
+    def _calc_stats(self) -> pd.DataFrame:
         if not self.snapshot_dict:
             return pd.DataFrame()
 
-        return pd.concat(_summarize_snapshot(), ignore_index=True)
+        stats_dfs = []
+        for timestamp, snapshot in sorted(self.snapshot_dict.items()):
+            snapshot_stats = snapshot.statistics.copy()
+            snapshot_stats.insert(0, "timestamp", timestamp)
+            stats_dfs.append(snapshot_stats)
 
-    # binary annular statistics
+        return pd.concat(stats_dfs, ignore_index=True)
+
+    # annular statistics
     @property
     def annular_statistics(self) -> pd.DataFrame:
-        if self._cache_binary_annular is None:
-            self._cache_binary_annular = self._compute_annular_statistics()
-        return self._cache_binary_annular
+        if self._cache_bin_annular_stats is None:
+            self._cache_bin_annular_stats = self._calc_annular_stats()
+        return self._cache_bin_annular_stats
 
-    def _compute_annular_statistics(self) -> pd.DataFrame:
+    def _calc_annular_stats(self) -> pd.DataFrame:
         if not self.snapshot_dict:
             return pd.DataFrame()
 
-        results = []
-        for t, snapshot in self:
-            stats = snapshot.annular_statistics
-            if stats is None or stats.empty:
+        annular_stats_dfs = []
+        for timestamp, snapshot in sorted(self.snapshot_dict.items()):
+            snapshot_annular = snapshot.annular_statistics
+            if snapshot_annular.empty:
                 continue
-            df = stats.copy()
-            df.insert(0, "timestamp", t)
-            results.append(df)
-        return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
+            snapshot_annular_copy = snapshot_annular.copy()
+            snapshot_annular_copy.insert(0, "timestamp", timestamp)
+            annular_stats_dfs.append(snapshot_annular_copy)
+
+        return (
+            pd.concat(annular_stats_dfs, ignore_index=True)
+            if annular_stats_dfs
+            else pd.DataFrame()
+        )

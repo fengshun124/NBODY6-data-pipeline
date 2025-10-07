@@ -16,7 +16,7 @@ from nbody6.data.snapshot import Snapshot
 class SnapshotSeriesCollection:
     series_dict: Dict[Coordinate3D, SnapshotSeries]
 
-    _cache_summary: Optional[pd.DataFrame] = field(default=None, init=False, repr=False)
+    _cache_stats: Optional[pd.DataFrame] = field(default=None, init=False, repr=False)
     _cache_binary_annular: Optional[pd.DataFrame] = field(
         default=None, init=False, repr=False
     )
@@ -47,7 +47,7 @@ class SnapshotSeriesCollection:
 
     # cache management
     def _clear_cache(self):
-        self._cache_summary = None
+        self._cache_stats = None
         self._cache_binary_annular = None
         if self._parent_invalidator is not None:
             self._parent_invalidator()
@@ -168,56 +168,52 @@ class SnapshotSeriesCollection:
         data = joblib.load(filepath)
         return cls.from_dict(data)
 
-    # overall summary
+    # overall statistics
     @property
-    def summary(self) -> pd.DataFrame:
-        if self._cache_summary is None:
-            self._cache_summary = self._summarize()
-        return self._cache_summary
+    def statistics(self) -> pd.DataFrame:
+        if self._cache_stats is None:
+            self._cache_stats = self._calc_stats()
+        return self._cache_stats
 
-    def _summarize(self) -> pd.DataFrame:
-        def _summarize_series():
-            for coord, series in self.series_dict.items():
-                series_summary = series.summary.copy()
-                series_summary["galactic_x"] = coord[0]
-                series_summary["galactic_y"] = coord[1]
-                series_summary["galactic_z"] = coord[2]
-
-                coord_cols = ["galactic_x", "galactic_y", "galactic_z"]
-                other_cols = [
-                    col for col in series_summary.columns if col not in coord_cols
-                ]
-                yield series_summary[coord_cols + other_cols]
-
+    def _calc_stats(self) -> pd.DataFrame:
         if not self.series_dict:
             return pd.DataFrame()
 
-        return pd.concat(_summarize_series(), ignore_index=True)
+        stats_dfs = []
+        for coord, series in self.series_dict.items():
+            series_stats = series.statistics.copy()
+            series_stats.insert(0, "galactic_x", coord[0])
+            series_stats.insert(1, "galactic_y", coord[1])
+            series_stats.insert(2, "galactic_z", coord[2])
+            stats_dfs.append(series_stats)
 
-    # binary annular statistics
+        return pd.concat(stats_dfs, ignore_index=True)
+
+    # annular statistics
     @property
     def annular_statistics(self) -> pd.DataFrame:
         if self._cache_binary_annular is None:
-            self._cache_binary_annular = self._compute_annular_statistics()
+            self._cache_binary_annular = self._calc_annular_stats()
         return self._cache_binary_annular
 
-    def _compute_annular_statistics(self) -> pd.DataFrame:
+    def _calc_annular_stats(self) -> pd.DataFrame:
         if not self.series_dict:
             return pd.DataFrame()
 
-        results = []
+        annular_stats_dfs = []
         for coord, series in self.series_dict.items():
-            stats = series.annular_statistics
-            if stats is None or stats.empty:
+            series_annular = series.annular_statistics
+            if series_annular.empty:
                 continue
-            stats_df = stats.copy()
-            stats_df["galactic_x"], stats_df["galactic_y"], stats_df["galactic_z"] = (
-                coord
-            )
 
-            stats_df = stats_df[
-                (coord_cols := ["galactic_x", "galactic_y", "galactic_z"])
-                + [col for col in stats_df.columns if col not in coord_cols]
-            ]
-            results.append(stats_df)
-        return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
+            series_annular_copy = series_annular.copy()
+            series_annular_copy.insert(0, "galactic_x", coord[0])
+            series_annular_copy.insert(1, "galactic_y", coord[1])
+            series_annular_copy.insert(2, "galactic_z", coord[2])
+            annular_stats_dfs.append(series_annular_copy)
+
+        return (
+            pd.concat(annular_stats_dfs, ignore_index=True)
+            if annular_stats_dfs
+            else pd.DataFrame()
+        )

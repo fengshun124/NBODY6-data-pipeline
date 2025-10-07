@@ -209,7 +209,7 @@ class PseudoObserver:
             obs_dist_map = stars_df.set_index("name")["dist_pc"].to_dict()
 
             # mean of observed distances of all components
-            bin_sys_df["obs_dist_pc"] = [
+            bin_sys_df["dist_obs_pc"] = [
                 float(np.mean([obs_dist_map[i] for i in (obj1_ids + obj2_ids)]))
                 for obj1_ids, obj2_ids in bin_sys_df[
                     ["obj1_ids", "obj2_ids"]
@@ -217,7 +217,7 @@ class PseudoObserver:
             ]
             bin_sys_df["is_unresolved_binary"] = (
                 bin_sys_df["semi"]
-                <= bin_sys_df["obs_dist_pc"] * self.UNRESOLVED_SEP_FACTOR
+                <= bin_sys_df["dist_obs_pc"] * self.UNRESOLVED_SEP_FACTOR
             )
 
             # names participating in resolved systems

@@ -128,16 +128,19 @@ def process(
             gc.collect()
 
         # export summary_df & bin_stats_df
-        summary_df = series_collection.summary.copy()
+        summary_df = series_collection.statistics.copy()
         annular_stats_df = series_collection.annular_statistics.copy()
 
         for k, v in sim_attr_dict.items():
-            summary_df[k] = v
-            annular_stats_df[k] = v
+            summary_df.insert(0, k, v)
+            annular_stats_df.insert(0, k, v)
 
         summary_df.to_csv(summary_file, index=False)
         annular_stats_df.to_csv(annular_stats_file, index=False)
         logging.info(f"[{sim_exp_label}] Finished.")
+
+        del series_collection
+        gc.collect()
 
     except Exception as e:
         logging.error(f"[{sim_exp_label}] Failed: {e!r}", exc_info=True)
@@ -155,34 +158,34 @@ def process_all(log_file="batch.log"):
             log_file=log_file,
         )
 
-    Parallel(n_jobs=120)(
+    Parallel(n_jobs=20)(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
         if attr_dict["init_mass_lv"] in [5, 6, 7, 8]
     )
-    Parallel(n_jobs=30)(
-        delayed(run)(attr_dict, path, label)
-        for attr_dict, path, label in simulations
-        if attr_dict["init_mass_lv"] in [2, 3, 4]
-    )
-    Parallel(n_jobs=15)(
-        delayed(run)(attr_dict, path, label)
-        for attr_dict, path, label in simulations
-        if attr_dict["init_mass_lv"] in [1]
-    )
+    # Parallel(n_jobs=2)(
+    #     delayed(run)(attr_dict, path, label)
+    #     for attr_dict, path, label in simulations
+    #     if attr_dict["init_mass_lv"] in [2, 3, 4]
+    # )
+    # Parallel(n_jobs=2)(
+    #     delayed(run)(attr_dict, path, label)
+    #     for attr_dict, path, label in simulations
+    #     if attr_dict["init_mass_lv"] in [1]
+    # )
 
 
 if __name__ == "__main__":
     process_all(log_file="batch.log")
 
     # process(
-    #     sim_path=SIM_ROOT_BASE / "Rad04/zmet0014/M2/0005",
-    #     sim_exp_label="Rad04-zmet0014-M2-0005",
+    #     sim_path=SIM_ROOT_BASE / "Rad12/zmet0014/M8/0507",
+    #     sim_exp_label="Rad12-zmet0014-M8-0507",
     #     sim_attr_dict={
-    #         "init_gc_radius": 4,
+    #         "init_gc_radius": 12,
     #         "init_metallicity": 14,
-    #         "init_mass_lv": 2,
-    #         "init_pos": 5,
+    #         "init_mass_lv": 8,
+    #         "init_pos": 507,
     #     },
     #     log_file="test.log",
     # )

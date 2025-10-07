@@ -23,8 +23,8 @@ class Snapshot:
     binary_systems: pd.DataFrame
 
     # caches
-    _cache_summary: Optional[pd.DataFrame] = field(default=None, init=False, repr=False)
-    _cache_binary_annular: Optional[pd.DataFrame] = field(
+    _cache_stats: Optional[pd.DataFrame] = field(default=None, init=False, repr=False)
+    _cache_bin_annular_stats: Optional[pd.DataFrame] = field(
         default=None, init=False, repr=False
     )
 
@@ -48,8 +48,8 @@ class Snapshot:
 
     # cache management
     def _clear_cache(self):
-        self._cache_summary = None
-        self._cache_binary_annular = None
+        self._cache_stats = None
+        self._cache_bin_annular_stats = None
 
     def _invalidate_self_and_parent(self):
         self._clear_cache()
@@ -141,168 +141,253 @@ class Snapshot:
         data = joblib.load(filepath)
         return cls.from_dict(data)
 
-    # overall summary statistics
+    # overall statistics
     @property
-    def summary(self) -> pd.DataFrame:
-        if self._cache_summary is None:
-            self._cache_summary = self._summarize()
-        return self._cache_summary
+    def statistics(self) -> pd.DataFrame:
+        if self._cache_stats is None:
+            self._cache_stats = self._calc_stats()
+        return self._cache_stats
 
-    def _summarize(self) -> pd.DataFrame:
-        def _summarize(
-            stars_df: pd.DataFrame, bin_sys_df: pd.DataFrame
-        ) -> Dict[str, float]:
-            stats = {
-                "n_star": len(stars_df),
-                "n_binary_star": int(stars_df["is_binary"].sum())
-                if not stars_df.empty
-                else 0,
-                "n_binary_system": len(bin_sys_df),
-                "total_mass": float(stars_df["mass"].sum())
-                if not stars_df.empty
-                else 0.0,
-                **(
-                    {}
-                    if stars_df.empty
-                    else summarize_descriptive_stats(stars_df["mass"], "mass")
-                ),
-            }
-            if not bin_sys_df.empty:
-                stats.update(
-                    **{
-                        k: v
-                        for col in ["ecc", "semi", "log_period_days"]
-                        for k, v in summarize_descriptive_stats(
-                            bin_sys_df[col], col
-                        ).items()
+    def _calc_stats(self) -> pd.DataFrame:
+        stars_df = self.stars
+        bin_sys_df = self.binary_systems
+
+        # early return for empty data
+        if stars_df.empty and bin_sys_df.empty:
+            return pd.DataFrame(
+                [
+                    {
+                        "r_tidal": self.header.get("r_tidal", np.nan),
+                        "r_half_mass": self.header.get("r_half_mass", np.nan),
+                    }
+                ]
+            )
+
+        star_mass = (
+            stars_df["mass"].to_numpy(dtype=float, copy=False)
+            if not stars_df.empty
+            else np.array([])
+        )
+        binary_star_flags = (
+            stars_df["is_binary"].to_numpy(dtype=bool, copy=False)
+            if not stars_df.empty
+            else np.array([], dtype=bool)
+        )
+
+        # prepare distance-based masks
+        mask_specs = [("", None, None)]
+        for radius_label, col_name in [
+            ("r_tidal", "is_within_r_tidal"),
+            ("2x_r_tidal", "is_within_2x_r_tidal"),
+        ]:
+            if col_name in stars_df.columns and col_name in bin_sys_df.columns:
+                mask_specs.append(
+                    (
+                        f"within_{radius_label}_",
+                        stars_df[col_name].to_numpy(dtype=bool, copy=False)
+                        if not stars_df.empty
+                        else None,
+                        bin_sys_df[col_name].to_numpy(dtype=bool, copy=False)
+                        if not bin_sys_df.empty
+                        else None,
+                    )
+                )
+
+        bin_sys_stat_cols = [
+            col
+            for col in ["ecc", "semi", "log_period_days"]
+            if col in bin_sys_df.columns
+        ]
+        bin_sys_type_cols = [
+            f"is_{bin_type}_binary"
+            for bin_type in ["wide", "hard", "unresolved"]
+            if f"is_{bin_type}_binary" in bin_sys_df.columns
+        ]
+
+        stats_dict: Dict[str, float] = {}
+
+        for prefix, star_mask, bin_sys_mask in mask_specs:
+            # star statistics
+            if not stars_df.empty:
+                masked_mass = star_mass if star_mask is None else star_mass[star_mask]
+                masked_is_binary = (
+                    binary_star_flags
+                    if star_mask is None
+                    else binary_star_flags[star_mask]
+                )
+                n_star = len(masked_mass)
+
+                stats_dict[f"{prefix}n_star"] = n_star
+                stats_dict[f"{prefix}n_binary_star"] = int(masked_is_binary.sum())
+                stats_dict[f"{prefix}total_mass"] = float(masked_mass.sum())
+
+                if n_star:
+                    stats_dict.update(
+                        {
+                            f"{prefix}{k}": v
+                            for k, v in summarize_descriptive_stats(
+                                pd.Series(masked_mass, copy=False), "mass"
+                            ).items()
+                        }
+                    )
+            else:
+                stats_dict.update(
+                    {
+                        f"{prefix}n_star": 0,
+                        f"{prefix}n_binary_star": 0,
+                        f"{prefix}total_mass": 0.0,
                     }
                 )
-            return stats
 
-        # overall
-        stats_dict = _summarize(stars_df=self.stars, bin_sys_df=self.binary_systems)
+            # binary system statistics
+            if not bin_sys_df.empty:
+                masked_bin_sys_df = (
+                    bin_sys_df if bin_sys_mask is None else bin_sys_df[bin_sys_mask]
+                )
+                n_bin_sys = len(masked_bin_sys_df)
+                stats_dict[f"{prefix}n_binary_system"] = n_bin_sys
 
-        # for stars within specific regions
-        for criterion_key in ["is_within_r_tidal", "is_within_2x_r_tidal"]:
-            stars_masked = (
-                self.stars[self.stars[criterion_key]]
-                if not self.stars.empty
-                else self.stars
-            )
-            bins_masked = (
-                self.binary_systems[self.binary_systems[criterion_key]]
-                if not self.binary_systems.empty
-                else self.binary_systems
-            )
-            criterion_stats = _summarize(stars_df=stars_masked, bin_sys_df=bins_masked)
-            stats_dict.update(
-                {
-                    f"{criterion_key.replace('is_', '')}_{k}": v
-                    for k, v in criterion_stats.items()
-                }
-            )
+                if n_bin_sys:
+                    stats_dict.update(
+                        {
+                            f"{prefix}{k}": v
+                            for col in bin_sys_stat_cols
+                            for k, v in summarize_descriptive_stats(
+                                masked_bin_sys_df[col], col
+                            ).items()
+                        }
+                    )
+
+                    stats_dict.update(
+                        {
+                            f"{prefix}n_{col[3:-7]}_binary_system": int(
+                                masked_bin_sys_df[col].sum()
+                            )
+                            for col in bin_sys_type_cols
+                        }
+                    )
+                else:
+                    stats_dict.update(
+                        {
+                            f"{prefix}n_{col[3:-7]}_binary_system": 0
+                            for col in bin_sys_type_cols
+                        }
+                    )
+            else:
+                stats_dict[f"{prefix}n_binary_system"] = 0
+                stats_dict.update(
+                    {
+                        f"{prefix}n_{col[3:-7]}_binary_system": 0
+                        for col in bin_sys_type_cols
+                    }
+                )
 
         return pd.DataFrame([stats_dict]).assign(
-            r_tidal=self.header["r_tidal"], r_half_mass=self.header["r_half_mass"]
+            r_tidal=self.header.get("r_tidal", np.nan),
+            r_half_mass=self.header.get("r_half_mass", np.nan),
         )
 
     # binary annular statistics
     @property
     def annular_statistics(self) -> pd.DataFrame:
-        if self._cache_binary_annular is None:
-            self._cache_binary_annular = self._compute_annular_statistics()
-        return self._cache_binary_annular
+        if self._cache_bin_annular_stats is None:
+            self._cache_bin_annular_stats = self._calc_annular_stats()
+        return self._cache_bin_annular_stats
 
-    def _compute_annular_statistics(self) -> pd.DataFrame:
-        if self.binary_systems.empty:
+    def _calc_annular_stats(self) -> pd.DataFrame:
+        # return for empty data
+        if self.binary_systems.empty or (
+            self.stars.empty and self.binary_systems.empty
+        ):
             return pd.DataFrame()
 
-        stars_df = self.stars.copy()
-        bin_sys_df = self.binary_systems.copy()
+        stars_df = self.stars
+        bin_sys_df = self.binary_systems
 
-        if stars_df.empty and bin_sys_df.empty:
-            return pd.DataFrame()
-
-        # mark stars that are not in any binary pairs
         binary_pairs = set(bin_sys_df["pair"])
-        stars_df["is_binary"] = stars_df["hierarchy"].apply(
-            lambda h: any(pair in h for pair in binary_pairs)
+        binary_star_flags = (
+            stars_df["hierarchy"]
+            .apply(lambda h: bool(binary_pairs & set(h)))
+            .to_numpy(dtype=np.int8, copy=False)
+            if not stars_df.empty
+            else np.array([], dtype=np.int8)
         )
 
-        bin_sys_stats_policy = {
-            "n_binary_system": ("pair", "size"),
-            **{
-                f"n_{bin_type}_binary_system": (f"is_{bin_type}_binary", "sum")
-                for bin_type in ["wide", "hard", "unresolved"]
-                if f"is_{bin_type}_binary" in bin_sys_df.columns
-            },
-        }
-        star_stats_policy = {
-            "n_single": ("is_binary", lambda s: (~s).sum()),
-            "n_binary_star": ("is_binary", "sum"),
-        }
+        # extract binary system type columns
+        bin_sys_type_cols = [
+            f"is_{bin_type}_binary"
+            for bin_type in ["wide", "hard", "unresolved"]
+            if f"is_{bin_type}_binary" in bin_sys_df.columns
+        ]
 
-        stats_dfs = []
-        for dist_key in ["dist_dc_r_tidal", "dist_dc_r_half_mass"]:
-            if dist_key not in stars_df.columns or dist_key not in bin_sys_df.columns:
+        annular_stats_dfs = []
+        for dist_col in ["dist_dc_r_tidal", "dist_dc_r_half_mass"]:
+            if dist_col not in stars_df.columns or dist_col not in bin_sys_df.columns:
                 continue
 
-            max_dist = max(
-                stars_df[dist_key].max() if not stars_df.empty else 0,
-                bin_sys_df[dist_key].max() if not bin_sys_df.empty else 0,
-            )
-            dist_bins = np.arange(0, int(np.ceil(max_dist)) + 1, 1)
-
-            bin_sys_stats_df = (
-                (
-                    bin_sys_df.assign(
-                        _bin=pd.cut(
-                            bin_sys_df[dist_key],
-                            dist_bins,
-                            right=True,
-                            include_lowest=True,
-                        )
-                    )
-                    .groupby("_bin", observed=True)
-                    .agg(**bin_sys_stats_policy)
-                    .reset_index()
+            # extract and prepare radius arrays
+            star_radius = (
+                np.ceil(np.maximum(stars_df[dist_col].to_numpy(copy=False), 0)).astype(
+                    np.int32
                 )
-                if not bin_sys_df.empty
-                else pd.DataFrame()
+                if not stars_df.empty
+                else np.array([], dtype=np.int32)
+            )
+            bin_sys_radius = np.ceil(
+                np.maximum(bin_sys_df[dist_col].to_numpy(copy=False), 0)
+            ).astype(np.int32)
+            max_radius = max(
+                star_radius.max() if star_radius.size else -1,
+                bin_sys_radius.max() if bin_sys_radius.size else -1,
+            )
+            if max_radius < 0:
+                continue
+
+            radius_range = max_radius + 1
+
+            # build annular data dictionary with vectorized operations
+            annular_data = {
+                "dist_key": dist_col,
+                "radius": np.arange(radius_range, dtype=np.int64),
+                "n_binary_system": np.bincount(
+                    bin_sys_radius, minlength=radius_range
+                ).astype(np.int64),
+            }
+
+            # count stars and binary stars in annuli
+            if star_radius.size:
+                annular_data["n_star"] = np.bincount(
+                    star_radius, minlength=radius_range
+                ).astype(np.int64)
+                annular_data["n_binary_star"] = np.bincount(
+                    star_radius, weights=binary_star_flags, minlength=radius_range
+                ).astype(np.int64)
+            else:
+                annular_data["n_star"] = np.zeros(radius_range, dtype=np.int64)
+                annular_data["n_binary_star"] = np.zeros(radius_range, dtype=np.int64)
+
+            annular_data["n_single"] = (
+                annular_data["n_star"] - annular_data["n_binary_star"]
             )
 
-            star_stats_df = (
-                stars_df.assign(
-                    _bin=pd.cut(
-                        stars_df[dist_key], dist_bins, right=True, include_lowest=True
-                    )
-                )
-                .groupby("_bin", observed=True)
-                .agg(**star_stats_policy)
-                .reset_index()
+            annular_data.update(
+                {
+                    f"n_{col[3:-7]}_binary_system": np.bincount(
+                        bin_sys_radius,
+                        weights=bin_sys_df[col].to_numpy(dtype=np.int8, copy=False),
+                        minlength=radius_range,
+                    ).astype(np.int64)
+                    for col in bin_sys_type_cols
+                }
             )
 
-            stats_df = (
-                pd.merge(bin_sys_stats_df, star_stats_df, on="_bin", how="outer")
-                .assign(
-                    radius=lambda df: df["_bin"].apply(lambda x: x.right).astype(int),
-                    dist_key=dist_key,
-                    n_star=lambda df: df["n_single"].fillna(0)
-                    + df["n_binary_star"].fillna(0),
-                )
-                .drop("_bin", axis=1)
-                .fillna(0)
-            )
+            annular_stats_dfs.append(pd.DataFrame(annular_data))
 
-            count_cols = [col for col in stats_df.columns if col.startswith("n_")]
-            stats_df[count_cols] = stats_df[count_cols].astype(int)
-            stats_dfs.append(stats_df)
-
-        if not stats_dfs:
+        if not annular_stats_dfs:
             return pd.DataFrame()
 
-        full_stats_df = pd.concat(stats_dfs, ignore_index=True)
-
+        # final assembly and ordering
+        annular_stats_df = pd.concat(annular_stats_dfs, ignore_index=True)
         base_cols = [
             "dist_key",
             "radius",
@@ -311,11 +396,12 @@ class Snapshot:
             "n_binary_star",
             "n_binary_system",
         ]
-        other_cols = [c for c in full_stats_df.columns if c not in base_cols]
-        col_order = base_cols + sorted(other_cols)
+        ordered_cols = base_cols + sorted(
+            col for col in annular_stats_df.columns if col not in base_cols
+        )
 
         return (
-            full_stats_df[[c for c in col_order if c in full_stats_df.columns]]
+            annular_stats_df[ordered_cols]
             .sort_values(["dist_key", "radius"])
             .reset_index(drop=True)
         )
