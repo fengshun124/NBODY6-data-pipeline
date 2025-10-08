@@ -102,19 +102,19 @@ class NBody6DataLoader:
     ) -> NBody6Data:
         if self._simulation_data is not None:
             warnings.warn(
-                f"[{self._root.name}] Reloading simulation data. Previous data will be overwritten.",
+                f"[{self._root}] Reloading simulation data. Previous data will be overwritten.",
                 UserWarning,
             )
             self._simulation_data = None
 
         if not is_strict:
             warnings.warn(
-                f"[{self._root.name}] Non-strict mode enabled. Schema errors will be ignored.",
+                f"[{self._root}] Non-strict mode enabled. Schema errors will be ignored.",
                 UserWarning,
             )
         if is_allow_timestamp_trim:
             warnings.warn(
-                f"[{self._root.name}] Timestamp trimming enabled. Unmatched timestamps will be discarded.",
+                f"[{self._root}] Timestamp trimming enabled. Unmatched timestamps will be discarded.",
                 UserWarning,
             )
         if timestamp_tolerance < 0:
