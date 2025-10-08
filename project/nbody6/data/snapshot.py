@@ -381,7 +381,8 @@ class Snapshot:
                 }
             )
 
-            annular_stats_dfs.append(pd.DataFrame(annular_data))
+            annular_df = pd.DataFrame(annular_data)
+            annular_stats_dfs.append(annular_df[annular_df["n_star"] > 0])
 
         if not annular_stats_dfs:
             return pd.DataFrame()
