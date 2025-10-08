@@ -66,23 +66,27 @@ def process(
     # prepare directories & logger
     raw_dir = OUTPUT_BASE / "cache" / "raw"
     obs_dir = OUTPUT_BASE / "cache" / "obs"
-    summary_dir = OUTPUT_BASE / "summary"
+    overall_stats_dir = OUTPUT_BASE / "overall_stats"
     annular_stats_dir = OUTPUT_BASE / "annular_stats"
     log_dir = OUTPUT_BASE / "logs"
-    for p in [raw_dir, obs_dir, summary_dir, annular_stats_dir, log_dir]:
+    for p in [raw_dir, obs_dir, overall_stats_dir, annular_stats_dir, log_dir]:
         p.mkdir(parents=True, exist_ok=True)
     setup_logger(log_dir / log_file)
+
+    logging.info(f"[{sim_exp_label}] Start processing {sim_path.resolve()} ...")
 
     try:
         cache_snapshot_series_joblib = raw_dir / f"{sim_exp_label}-raw.joblib"
         cache_obs_series_collection_joblib = obs_dir / f"{sim_exp_label}-obs.joblib"
 
-        summary_file = summary_dir / f"{sim_exp_label}-summary.csv"
+        overall_stats_file = overall_stats_dir / f"{sim_exp_label}-overall_stats.csv"
         annular_stats_file = annular_stats_dir / f"{sim_exp_label}-annular_stats.csv"
 
-        # if final summary and bin_stats exist -> skip
-        if summary_file.is_file() and annular_stats_file.is_file():
-            logging.info(f"[{sim_exp_label}] summary_df & bin_stats_df exist. Skip.")
+        # if final overall_stats and annular_stats exist -> skip
+        if overall_stats_file.is_file() and annular_stats_file.is_file():
+            logging.info(
+                f"[{sim_exp_label}] overall_stats_df & annular_stats_df exist. Skip."
+            )
             return
 
         # if series_collection exist -> load & export
@@ -127,19 +131,19 @@ def process(
             del series, observer
             gc.collect()
 
-        # export summary_df & bin_stats_df
-        summary_df = series_collection.statistics.copy()
+        # export overall_stats_df & annular_stats_df
+        overall_stats_df = series_collection.statistics.copy()
         annular_stats_df = series_collection.annular_statistics.copy()
 
         for k, v in sim_attr_dict.items():
-            summary_df.insert(0, k, v)
+            overall_stats_df.insert(0, k, v)
             annular_stats_df.insert(0, k, v)
 
-        summary_df.to_csv(summary_file, index=False)
+        overall_stats_df.to_csv(overall_stats_file, index=False)
         annular_stats_df.to_csv(annular_stats_file, index=False)
         logging.info(f"[{sim_exp_label}] Finished.")
 
-        del series_collection
+        del series_collection, overall_stats_df, annular_stats_df
         gc.collect()
 
     except Exception as e:
@@ -158,34 +162,39 @@ def process_all(log_file="batch.log"):
             log_file=log_file,
         )
 
-    Parallel(n_jobs=20)(
+    Parallel(n_jobs=30)(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
         if attr_dict["init_mass_lv"] in [5, 6, 7, 8]
     )
-    # Parallel(n_jobs=2)(
-    #     delayed(run)(attr_dict, path, label)
-    #     for attr_dict, path, label in simulations
-    #     if attr_dict["init_mass_lv"] in [2, 3, 4]
-    # )
-    # Parallel(n_jobs=2)(
-    #     delayed(run)(attr_dict, path, label)
-    #     for attr_dict, path, label in simulations
-    #     if attr_dict["init_mass_lv"] in [1]
-    # )
+    Parallel(n_jobs=12)(
+        delayed(run)(attr_dict, path, label)
+        for attr_dict, path, label in simulations
+        if attr_dict["init_mass_lv"] in [3, 4]
+    )
+    Parallel(n_jobs=4)(
+        delayed(run)(attr_dict, path, label)
+        for attr_dict, path, label in simulations
+        if attr_dict["init_mass_lv"] in [2]
+    )
+    Parallel(n_jobs=1)(
+        delayed(run)(attr_dict, path, label)
+        for attr_dict, path, label in simulations
+        if attr_dict["init_mass_lv"] in [1]
+    )
 
 
 if __name__ == "__main__":
     process_all(log_file="batch.log")
 
     # process(
-    #     sim_path=SIM_ROOT_BASE / "Rad12/zmet0014/M8/0507",
-    #     sim_exp_label="Rad12-zmet0014-M8-0507",
+    #     sim_path=SIM_ROOT_BASE / "Rad12/zmet0014/M8/0509",
+    #     sim_exp_label="Rad12-zmet0014-M8-0509",
     #     sim_attr_dict={
     #         "init_gc_radius": 12,
     #         "init_metallicity": 14,
     #         "init_mass_lv": 8,
-    #         "init_pos": 507,
+    #         "init_pos":509,
     #     },
     #     log_file="test.log",
     # )
