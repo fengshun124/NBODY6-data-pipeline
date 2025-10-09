@@ -2,7 +2,8 @@
 
 ## Data Processing Pipeline Overview
 
-The pipeline transforming raw N-Body6 outputs into analysis-ready "observed" data by parsing files, assembling them into time-series snapshots, and simulating observational constraints.
+The pipeline that transforms raw N-Body6 outputs into analysis-ready "observed" data by parsing files,
+assembling them into time-series snapshots, and simulating observational constraints.
 
 The core workflow follows the diagram below:
 
@@ -10,17 +11,14 @@ The core workflow follows the diagram below:
 graph TD
     A[Raw N-Body6 Files] --> B(NBody6DataLoader /<br/>SnapshotAssembler <br/> -- Collect Raw Data --);
     B --> C[Snapshot /<br/>SnapshotSeries];
-    C --> D(PseudoObserver <br/> -- Simulated Observation --);
+    C --> D(PseudoObserver <br/> -- Simulate Observation --);
     D --> E[PseudoObservedSnapshot /<br/>SnapshotSeriesCollection];
-
-    style A fill:#E50000,stroke:#333,stroke-width:2px,color:#fff
-    style B fill:#E6E6E6,stroke:#333,stroke-width:2px
-    style C fill:#FAC205,stroke:#333,stroke-width:2px
-    style D fill:#E6E6E6,stroke:#333,stroke-width:2px
-    style E fill:#15B01A,stroke:#333,stroke-width:2px,color:#fff
+    style A fill: #c0392b, stroke: #333, stroke-width: 2px, color: #fff
+    style B fill: #7f8c8d, stroke: #333, stroke-width: 2px, color: #fff
+    style C fill: #f39c12, stroke: #333, stroke-width: 2px, color: #fff
+    style D fill: #7f8c8d, stroke: #333, stroke-width: 2px, color: #fff
+    style E fill: #27ae60, stroke: #333, stroke-width: 2px, color: #fff
 ```
-
-...
 
 ### N-Body6 Files
 
@@ -33,7 +31,7 @@ Each file contains data at multiple timestamps `time` in Myr:
 | **OUT9**           | Pairing information and orbital attributes of **regularized binaries**. Each row links two component stars (`name1`, `name2`) to their common center of mass (`cmName`).               | `cmName`, `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                             | `time`                                                                              |
 | **fort.82**        | Stellar properties for both components of **regularized binaries**.                                                                                                                    | `name1`, `name2`, `mass1`, `mass2` [$\mathrm{M}_{\odot}$], `rad1`, `rad2` [$\log_{10}(\mathrm{R}_{\odot})$], `zlum1`, `zlum2` [$\log_{10}(\mathrm{L}_{\odot})$], `tempe1` `tempe2` [$\log_{10}({\mathrm{K}})$] | `time`                                                                              |
 | **fort.83**        | Stellar properties for **single stars** and **unregularized binaries**.                                                                                                                | `name`, `mass` [$\mathrm{M}_{\odot}$], `rad` [$\log_{10}(\mathrm{R}_{\odot})$], `zlum` [$\log_{10}(\mathrm{L}_{\odot})$], `tempe` [$\log_{10}({\mathrm{K}})$]                                                  | `time`                                                                              |
-| **fort.19**        | Pairing information for **unregularized binaries**. Binary components (`name1` / `name2`) may reference regularized binary centers (`cmName`).                                         | `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                                       | `time`,                                                                             |
+| **fort.19**        | Pairing information for **unregularized binaries**. Binary components (`name1` / `name2`) may reference regularized binary centers (`cmName`).                                         | `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                                       | `time`                                                                              |
 | **densCentre.txt** | Recalculated cluster density center and tidal radius from density profile analysis. Used as the primary reference for all distance calculations. NOT a vanilla output of N-Body6 code. | `time`, `r_tidal` [$\mathrm{pc}$], `density_center_x`, `density_center_y`, `density_center_z` [$\mathrm{pc}$]                                                                                                  | — (data serves as header)                                                           |
 
 These files are parsed by specialized `FileParser` classes, coordinated by the `NBody6DataLoader`.  
@@ -95,7 +93,7 @@ A `SnapshotSeries` is a temporal sequence of `Snapshot` objects that stores the 
 
 To mimic observational constraints
 (e.g., magnitude limits, resolution limits),
-the `Snapshot` object can be transformed into an `PseudoObservedSnapshot` object by `PseudoObserver`.
+the `Snapshot` object can be transformed into a `PseudoObservedSnapshot` object by `PseudoObserver`.
 
 This process includes:
 
@@ -125,26 +123,32 @@ Illustrative cases:
   Each binary is merged using the two-object formulas, then the results are recursively merged.
   $\Rightarrow$ `n_binary_system` remains 3; `n_star` drops from 4 to 1.
 
-Given the properties of two object (1 and 2), the merged properties are calculated as:
+Given the properties of two objects (1 and 2), the merged properties are calculated as:
 
 - **Position & Velocity**:
-  $$
-  \vec{r}_{\mathrm{photo}} = \frac{L_1 \vec{r}_1 + L_2 \vec{r}_2}{L_1 + L_2}, \qquad \vec{v}_{\mathrm{photo}} = \frac{L_1 \vec{v}_1 + L_2 \vec{v}_2}{L_1 + L_2}
-  $$
+  $\mathbf{r}_{\mathrm{photo}} = \frac{L_1\mathbf{r}_1 + L_2 \mathbf{r}_2}{L_1 + L_2},\;\mathbf{v}_{\mathrm{photo}} = \frac{L_1 \mathbf{v}_1 + L_2 \mathbf{v}_2}{L_1 + L_2}$
 - **Total Luminosity**: $L_{\mathrm{tot}} = L_1 + L_2$
 - **Total Mass**: $M_{\mathrm{tot}} = M_1 + M_2$
 - **Equivalent Radius**: $R_{\mathrm{eq}} = \sqrt{R_1^2 + R_2^2}$
 - **Effective Temperature** (Stefan-Boltzmann law):
-  $$
-  T_{\mathrm{eff}} = \left(\frac{L_{\mathrm{tot}}}{4\pi R_{\mathrm{eq}}^2 \sigma_{\mathrm{SB}}}\right)^{1/4}
-  $$
+  $T_{\mathrm{eff}} = \left(\frac{L_{\mathrm{tot}}}{4\pi R_{\mathrm{eq}}^2 \sigma_{\mathrm{SB}}}\right)^{1/4}$
 
 For hierarchical systems, these formulas are applied recursively at each merging step.
 
-#### [:construction: TODO] Magnitude Cuts
+#### :construction: [TODO] Magnitude Cuts
 
 ~~Stars fainter than a specified absolute magnitude threshold (e.g., $M_g > 18$) are excluded.~~
 
 ## Statistics and Visualization
 
+After generating pseudo-observed snapshots, statistical analyses and visualizations are performed
+to compare some cluster characteristic statistics across different initial conditions.
 
+N-Body6 simulations output snapshots at adaptive timesteps that vary between runs. For example:
+
+- **Run A** may produce snapshots at: 0, 1.0, 2.0, 3.0, ... Myr
+- **Run B** may produce snapshots at: 0, 0.8, 1.6, 2.4, ... Myr
+
+To compare between runs, the time series of metrics (e.g., `r_tidal`, `binary_fraction`)
+are temporally aligned to a uniform 1 Myr grid within its range to avoid over-interpolation artifacts.
+Once aligned, metrics from different `init_pos` runs are aggregated and visualized.
