@@ -130,23 +130,24 @@ class PseudoObserver:
 
         records = [
             (
-                lambda merged_attr, top_set, pair_name: merged_attr.update(
-                    {
-                        "name": pair_name,
-                        "hierarchy": list(
-                            dict.fromkeys(
-                                [str(obj_id) for obj_id in sorted(top_set)]
+                lambda merged_attr, top_set, pair_name: {
+                    **merged_attr,
+                    "name": pair_name,
+                    "hierarchy": tuple(
+                        sorted(
+                            set(
+                                [str(obj_id) for obj_id in top_set]
                                 + [
                                     unresolved_bin_sys_df.iloc[j]["pair"]
                                     for j, members in enumerate(member_sets)
                                     if members.issubset(top_set)
                                 ]
-                            )
-                        ),
-                        "is_multi_system": len(top_set) > 3,
-                    }
-                )
-                or merged_attr
+                            ),
+                            key=lambda p: (len(p), p),
+                        )
+                    ),
+                    "is_multi_system": len(top_set) > 2,
+                }
             )(
                 self._merge_unresolved_binaries(
                     star1_attr_dict=_fetch_attrs(
@@ -166,7 +167,6 @@ class PseudoObserver:
         if not records:
             return pd.DataFrame()
 
-        # return pd.DataFrame.from_records(records)
         return convert_to_offset_frame(
             cluster_center_pc=pseudo_obs_coord,
             centered_stars_df=pd.DataFrame.from_records(records),
@@ -261,9 +261,9 @@ class PseudoObserver:
                     + [c for c in df.columns if not c.startswith("is_") and c != "name"]
                 ]
             ),
-            binary_systems=bin_sys_df.sort_values(["obj1_ids", "obj2_ids"]).reset_index(
-                drop=True
-            ),
+            binary_systems=bin_sys_df.sort_values(
+                by=["obj1_ids", "obj2_ids"]
+            ).reset_index(drop=True),
             raw_stars=snapshot.stars,
             raw_binary_systems=snapshot.binary_systems,
         )

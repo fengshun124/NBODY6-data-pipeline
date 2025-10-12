@@ -194,7 +194,7 @@ if __name__ == "__main__":
     #         "init_gc_radius": 12,
     #         "init_metallicity": 14,
     #         "init_mass_lv": 8,
-    #         "init_pos":509,
+    #         "init_pos": 509,
     #     },
     #     log_file="test.log",
     # )

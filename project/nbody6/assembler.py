@@ -24,17 +24,17 @@ class SnapshotAssembler:
     def __repr__(self) -> str:
         return f"{type(self).__name__}(raw_data={repr(self._raw_data)})"
 
-    _POS_VEL_KEYS = ["x", "y", "z", "vx", "vy", "vz"]
-    _DENSITY_CENTER_DIST_KEYS = [
+    _POS_VEL_KEYS = ("x", "y", "z", "vx", "vy", "vz")
+    _DENSITY_CENTER_DIST_KEYS = (
         "dist_dc_pc",
         "dist_dc_r_tidal",
         "dist_dc_r_half_mass",
         "is_within_r_tidal",
         "is_within_2x_r_tidal",
-    ]
-    _ATTR_KEYS = ["mass", "zlum", "rad", "tempe"]
-    _BINARY_ATTR_KEYS = ["ecc", "semi", "log_period_days"]
-    _BINARY_PAIR_KEYS = [
+    )
+    _ATTR_KEYS = ("mass", "zlum", "rad", "tempe")
+    _BINARY_ATTR_KEYS = ("ecc", "semi", "log_period_days")
+    _BINARY_PAIR_KEYS = (
         "pair",
         "obj1_name",
         "obj2_name",
@@ -48,8 +48,8 @@ class SnapshotAssembler:
         "obj1_dist_dc_pc",
         "obj2_dist_dc_pc",
         "is_multi_system",
-    ]
-    _STARS_KEYS = [
+    )
+    _STARS_KEYS = (
         "name",
         "is_binary",
         "is_multi_system",
@@ -60,13 +60,13 @@ class SnapshotAssembler:
         "log_L_L_sol",
         "log_R_R_sol",
         *_DENSITY_CENTER_DIST_KEYS,
-    ]
-    _BINARY_SYSTEMS_KEYS = [
+    )
+    _BINARY_SYSTEMS_KEYS = (
         *_BINARY_PAIR_KEYS,
         "is_wide_binary",
         "is_hard_binary",
         *_DENSITY_CENTER_DIST_KEYS,
-    ]
+    )
 
     @property
     def snapshot_series(self) -> SnapshotSeries:
@@ -83,7 +83,7 @@ class SnapshotAssembler:
         o34_file_block: FileBlock,
         o9_file_block: FileBlock,
     ) -> Tuple[pd.DataFrame, Dict[int, List[int]]]:
-        atomic_pos_vel_df = o34_file_block.data[["name"] + self._POS_VEL_KEYS].copy()
+        atomic_pos_vel_df = o34_file_block.data[["name", *self._POS_VEL_KEYS]].copy()
 
         reg_bin_name_map = (
             o9_file_block.data.melt(
@@ -115,15 +115,15 @@ class SnapshotAssembler:
         reg_bin_attr_df = pd.concat(
             [
                 fort82_file_block.data.rename(
-                    columns={f"{attr}{i}": attr for attr in ["name"] + self._ATTR_KEYS}
-                )[["name"] + self._ATTR_KEYS]
+                    columns={f"{attr}{i}": attr for attr in ("name", *self._ATTR_KEYS)}
+                )[["name", *self._ATTR_KEYS]]
                 for i in (1, 2)
             ],
             ignore_index=True,
         ).drop_duplicates(subset=["name"])
 
         full_attr_df = pd.concat(
-            [reg_bin_attr_df, fort83_file_block.data[["name"] + self._ATTR_KEYS]],
+            [reg_bin_attr_df, fort83_file_block.data[["name", *self._ATTR_KEYS]]],
             ignore_index=True,
         ).astype({"name": int})
 
@@ -207,7 +207,8 @@ class SnapshotAssembler:
         r_half_mass = float(
             calc_half_mass_radius(
                 stars_df=stars_df.loc[
-                    stars_df["dist_dc_r_tidal"] <= 2, self._POS_VEL_KEYS + ["mass"]
+                    stars_df["dist_dc_r_tidal"] <= 2,
+                    (*self._POS_VEL_KEYS, "mass"),
                 ],
                 center_coord_pc=density_center,
             )
@@ -219,7 +220,7 @@ class SnapshotAssembler:
 
         return (
             stars_df,
-            stars_df.set_index("name")[self._DENSITY_CENTER_DIST_KEYS].to_dict(
+            stars_df.set_index("name")[list(self._DENSITY_CENTER_DIST_KEYS)].to_dict(
                 orient="index"
             ),
             {
@@ -243,7 +244,10 @@ class SnapshotAssembler:
         dist_dc_map: Dict[int, Dict[str, float]],
     ) -> Tuple[pd.DataFrame, Dict[str, Union[int, float]]]:
         # generate hierarchical pair name
-        def _label_hierarchy(obj1_ids: Union[List[int], Tuple[int, ...]], obj2_ids: Union[List[int], Tuple[int, ...]]) -> str:
+        def _label_hierarchy(
+            obj1_ids: Union[List[int], Tuple[int, ...]],
+            obj2_ids: Union[List[int], Tuple[int, ...]],
+        ) -> str:
             def _format_ids(ids: Union[List[int], Tuple[int, ...]]) -> str:
                 return (
                     "(" + "+".join(map(str, sorted(map(int, ids)))) + ")"
@@ -328,23 +332,23 @@ class SnapshotAssembler:
         )
         if full_bin_sys_df.empty:
             warnings.warn(f"[{timestamp} Myr] No binary systems found.")
-            return pd.DataFrame(columns=self._BINARY_PAIR_KEYS), {}
+            return pd.DataFrame(columns=list(self._BINARY_PAIR_KEYS)), {}
 
         full_bin_sys_df = (
             full_bin_sys_df.assign(
                 obj1_ids=full_bin_sys_df["obj1_name"].map(
-                    lambda x: tuple(reg_bin_name_map.get(x, [x]))
+                    lambda x: tuple(reg_bin_name_map.get(x, (x,)))
                 ),
                 obj2_ids=full_bin_sys_df["obj2_name"].map(
-                    lambda x: tuple(reg_bin_name_map.get(x, [x]))
+                    lambda x: tuple(reg_bin_name_map.get(x, (x,)))
                 ),
             )
             .assign(
                 obj1_masses=lambda df: df["obj1_ids"].map(
-                    lambda ids: [mass_map[i] for i in ids if i in mass_map]
+                    lambda ids: tuple(mass_map[i] for i in ids if i in mass_map)
                 ),
                 obj2_masses=lambda df: df["obj2_ids"].map(
-                    lambda ids: [mass_map[i] for i in ids if i in mass_map]
+                    lambda ids: tuple(mass_map[i] for i in ids if i in mass_map)
                 ),
                 obj1_total_mass=lambda df: df["obj1_masses"].map(sum),
                 obj2_total_mass=lambda df: df["obj2_masses"].map(sum),
@@ -420,9 +424,12 @@ class SnapshotAssembler:
 
         return (
             full_bin_sys_df[
-                self._BINARY_PAIR_KEYS
-                + self._DENSITY_CENTER_DIST_KEYS
-                + ["is_wide_binary", "is_hard_binary"]
+                [
+                    *self._BINARY_PAIR_KEYS,
+                    *self._DENSITY_CENTER_DIST_KEYS,
+                    "is_wide_binary",
+                    "is_hard_binary",
+                ]
             ],
             {
                 "n_binary_system": len(full_bin_sys_df),
@@ -550,9 +557,11 @@ class SnapshotAssembler:
             hierarchy_map = (
                 star_pair_df.groupby("name")["pair"]
                 .apply(
-                    lambda pairs: sorted(
-                        pairs.tolist() + [str(int(pairs.name))],
-                        key=lambda p: (len(p), p),
+                    lambda pairs: tuple(
+                        sorted(
+                            list(pairs) + [str(int(pairs.name))],
+                            key=lambda p: (len(p), p),
+                        )
                     )
                 )
                 .to_dict()
@@ -570,7 +579,7 @@ class SnapshotAssembler:
                     lambda n: multi_system_map.get(n, False)
                 ),
                 hierarchy=stars_df["name"].map(
-                    lambda n: hierarchy_map.get(n, [str(int(n))])
+                    lambda n: hierarchy_map.get(n, (str(int(n)),))
                 ),
             )
         else:
@@ -578,7 +587,7 @@ class SnapshotAssembler:
             stars_df = stars_df.assign(
                 is_binary=False,
                 is_multi_system=False,
-                hierarchy=stars_df["name"].map(lambda n: [str(int(n))]),
+                hierarchy=stars_df["name"].map(lambda n: (str(int(n)),)),
             )
 
         return Snapshot(
@@ -589,8 +598,8 @@ class SnapshotAssembler:
                 star_stat_dict=star_stat_dict,
                 bin_sys_stat_dict=bin_sys_stat_dict,
             ),
-            stars=stars_df[self._STARS_KEYS],
-            binary_systems=binary_systems_df[self._BINARY_SYSTEMS_KEYS],
+            stars=stars_df[list(self._STARS_KEYS)],
+            binary_systems=binary_systems_df[list(self._BINARY_SYSTEMS_KEYS)],
         )
 
     def assemble_at(
