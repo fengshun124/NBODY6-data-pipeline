@@ -9,6 +9,7 @@ from typing import Dict, Union
 import numpy as np
 from dotenv import load_dotenv
 from joblib import Parallel, delayed
+
 from nbody6.assembler import SnapshotAssembler
 from nbody6.data import SnapshotSeries, SnapshotSeriesCollection
 from nbody6.loader import NBody6DataLoader
@@ -102,7 +103,7 @@ def process(
                 series = SnapshotSeries.from_joblib(cache_snapshot_series_joblib)
                 logging.debug(f"[{sim_exp_label}] Loading series")
             else:
-                # start rom beginning
+                # start from beginning -> load raw data, assemble series & export
                 loader = NBody6DataLoader(root=sim_path)
                 logging.debug(f"[{sim_exp_label}] Loading {loader}")
                 loader.load(is_strict=True, is_allow_timestamp_trim=True)

@@ -63,6 +63,7 @@ class SnapshotAssembler:
     )
     _BINARY_SYSTEMS_KEYS = (
         *_BINARY_PAIR_KEYS,
+        "is_top_level",
         "is_wide_binary",
         "is_hard_binary",
         *_DENSITY_CENTER_DIST_KEYS,
@@ -422,6 +423,21 @@ class SnapshotAssembler:
             )
         )
 
+        # determine top-level binaries (not part of a larger hierarchical system)
+        component_set = set(full_bin_sys_df["obj1_ids"]) | set(
+            full_bin_sys_df["obj2_ids"]
+        )
+        bin_id_series = pd.Series(
+            [
+                tuple(sorted(a + b))
+                for a, b in zip(
+                    full_bin_sys_df["obj1_ids"], full_bin_sys_df["obj2_ids"]
+                )
+            ],
+            index=full_bin_sys_df.index,
+        )
+        full_bin_sys_df["is_top_level"] = ~bin_id_series.isin(component_set)
+
         return (
             full_bin_sys_df[
                 [
@@ -429,6 +445,7 @@ class SnapshotAssembler:
                     *self._DENSITY_CENTER_DIST_KEYS,
                     "is_wide_binary",
                     "is_hard_binary",
+                    "is_top_level",
                 ]
             ],
             {
