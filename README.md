@@ -144,7 +144,7 @@ For hierarchical systems, these formulas are applied recursively at each merging
 After generating pseudo-observed snapshots, statistical analyses and visualizations are performed
 to compare some cluster characteristic statistics across different initial conditions.
 
-N-Body6 simulations output snapshots at adaptive timesteps that vary between runs. For example:
+N-Body6 simulations output snapshots at adaptive timestamps that vary between runs. For example:
 
 - **Run A** may produce snapshots at: 0, 1.0, 2.0, 3.0, ... Myr
 - **Run B** may produce snapshots at: 0, 0.8, 1.6, 2.4, ... Myr
