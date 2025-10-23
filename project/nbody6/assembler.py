@@ -64,8 +64,8 @@ class SnapshotAssembler:
     _BINARY_SYSTEMS_KEYS = (
         *_BINARY_PAIR_KEYS,
         "is_top_level",
-        "is_wide_binary",
-        "is_hard_binary",
+        "is_wide_binary_system",
+        "is_hard_binary_system",
         *_DENSITY_CENTER_DIST_KEYS,
     )
 
@@ -412,8 +412,8 @@ class SnapshotAssembler:
                 )
             )
             .assign(
-                is_wide_binary=lambda df: df["semi"].apply(is_wide_binary),
-                is_hard_binary=lambda df: df["semi"].apply(
+                is_wide_binary_system=lambda df: df["semi"].apply(is_wide_binary),
+                is_hard_binary_system=lambda df: df["semi"].apply(
                     partial(
                         is_hard_binary,
                         half_mass_radius_pc=star_stat_dict["r_half_mass"],
@@ -443,20 +443,24 @@ class SnapshotAssembler:
                 [
                     *self._BINARY_PAIR_KEYS,
                     *self._DENSITY_CENTER_DIST_KEYS,
-                    "is_wide_binary",
-                    "is_hard_binary",
+                    "is_wide_binary_system",
+                    "is_hard_binary_system",
                     "is_top_level",
                 ]
             ],
             {
                 "n_binary_system": len(full_bin_sys_df),
                 "n_multi_system": int(full_bin_sys_df["is_multi_system"].sum()),
-                "n_hard_binary": int(full_bin_sys_df["is_hard_binary"].sum()),
-                "n_wide_binary": int(full_bin_sys_df["is_wide_binary"].sum()),
-                "n_binary_systems_within_r_tidal": int(
+                "n_hard_binary_system": int(
+                    full_bin_sys_df["is_hard_binary_system"].sum()
+                ),
+                "n_wide_binary_system": int(
+                    full_bin_sys_df["is_wide_binary_system"].sum()
+                ),
+                "n_binary_system_within_r_tidal": int(
                     full_bin_sys_df["is_within_r_tidal"].sum()
                 ),
-                "n_binary_systems_within_2x_r_tidal": int(
+                "n_binary_system_within_2x_r_tidal": int(
                     full_bin_sys_df["is_within_2x_r_tidal"].sum()
                 ),
             },

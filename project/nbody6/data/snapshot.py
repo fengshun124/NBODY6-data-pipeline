@@ -199,9 +199,9 @@ class Snapshot:
             if col in bin_sys_df.columns
         ]
         bin_sys_type_cols = [
-            f"is_{bin_type}_binary"
+            f"is_{bin_type}_binary_system"
             for bin_type in ["wide", "hard", "unresolved"]
-            if f"is_{bin_type}_binary" in bin_sys_df.columns
+            if f"is_{bin_type}_binary_system" in bin_sys_df.columns
         ]
 
         stats_dict: Dict[str, float] = {}
@@ -260,7 +260,7 @@ class Snapshot:
 
                     stats_dict.update(
                         {
-                            f"{prefix}n_{col[3:-7]}_binary_system": int(
+                            f"{prefix}n_{col[3:-14]}_binary_system": int(
                                 masked_bin_sys_df[col].sum()
                             )
                             for col in bin_sys_type_cols
@@ -269,7 +269,7 @@ class Snapshot:
                 else:
                     stats_dict.update(
                         {
-                            f"{prefix}n_{col[3:-7]}_binary_system": 0
+                            f"{prefix}n_{col[3:-14]}_binary_system": 0
                             for col in bin_sys_type_cols
                         }
                     )
@@ -277,7 +277,7 @@ class Snapshot:
                 stats_dict[f"{prefix}n_binary_system"] = 0
                 stats_dict.update(
                     {
-                        f"{prefix}n_{col[3:-7]}_binary_system": 0
+                        f"{prefix}n_{col[3:-14]}_binary_system": 0
                         for col in bin_sys_type_cols
                     }
                 )
@@ -372,7 +372,7 @@ class Snapshot:
 
             annular_data.update(
                 {
-                    f"n_{col[3:-7]}_binary_system": np.bincount(
+                    f"n_{col[3:-14]}_binary_system": np.bincount(
                         bin_sys_radius,
                         weights=bin_sys_df[col].to_numpy(dtype=np.int8, copy=False),
                         minlength=radius_range,
