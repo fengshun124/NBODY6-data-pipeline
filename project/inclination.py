@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 from joblib import Parallel, delayed
+
 from nbody6.assembler import SnapshotAssembler
 from nbody6.data import Snapshot, SnapshotSeries
 from nbody6.loader import NBody6DataLoader
