@@ -9,13 +9,13 @@ from typing import Dict, Union
 import numpy as np
 from dotenv import load_dotenv
 from joblib import Parallel, delayed
-
 from nbody6.assembler import SnapshotAssembler
 from nbody6.data import SnapshotSeries, SnapshotSeriesCollection
 from nbody6.loader import NBody6DataLoader
 from nbody6.observer import PseudoObserver
 
 load_dotenv()
+
 
 SIM_ROOT_BASE = Path(os.getenv("SIM_ROOT_BASE")).resolve()
 OUTPUT_BASE = Path(os.getenv("OUTPUT_BASE")).resolve()
@@ -63,7 +63,7 @@ def process(
     sim_exp_label: str,
     sim_attr_dict: Dict[str, Union[int, float]],
     log_file: str,
-):
+) -> None:
     # prepare directories & logger
     raw_dir = OUTPUT_BASE / "cache" / "raw"
     obs_dir = OUTPUT_BASE / "cache" / "obs"
@@ -77,9 +77,6 @@ def process(
     logging.info(f"[{sim_exp_label}] Start processing {sim_path.resolve()} ...")
 
     try:
-        cache_snapshot_series_joblib = raw_dir / f"{sim_exp_label}-raw.joblib"
-        cache_obs_series_collection_joblib = obs_dir / f"{sim_exp_label}-obs.joblib"
-
         overall_stats_file = overall_stats_dir / f"{sim_exp_label}-overall_stats.csv"
         annular_stats_file = annular_stats_dir / f"{sim_exp_label}-annular_stats.csv"
 
@@ -89,6 +86,9 @@ def process(
                 f"[{sim_exp_label}] overall_stats_df & annular_stats_df exist. Skip."
             )
             return
+
+        cache_snapshot_series_joblib = raw_dir / f"{sim_exp_label}-raw.joblib"
+        cache_obs_series_collection_joblib = obs_dir / f"{sim_exp_label}-obs.joblib"
 
         # if series_collection exist -> load & export
         if cache_obs_series_collection_joblib.is_file():
@@ -186,16 +186,16 @@ def process_all(log_file="batch.log"):
 
 
 if __name__ == "__main__":
-    process_all(log_file="batch.log")
+    # process_all(log_file="batch.log")
 
-    # process(
-    #     sim_path=SIM_ROOT_BASE / "Rad12/zmet0014/M8/0509",
-    #     sim_exp_label="Rad12-zmet0014-M8-0509",
-    #     sim_attr_dict={
-    #         "init_gc_radius": 12,
-    #         "init_metallicity": 14,
-    #         "init_mass_lv": 8,
-    #         "init_pos": 509,
-    #     },
-    #     log_file="test.log",
-    # )
+    process(
+        sim_path=SIM_ROOT_BASE / "Rad12/zmet0014/M8/0509",
+        sim_exp_label="Rad12-zmet0014-M8-0509",
+        sim_attr_dict={
+            "init_gc_radius": 12,
+            "init_metallicity": 14,
+            "init_mass_lv": 8,
+            "init_pos": 509,
+        },
+        log_file="test.log",
+    )

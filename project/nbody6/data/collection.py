@@ -80,9 +80,12 @@ class SnapshotSeriesCollection:
             ")"
         )
 
-    def __iter__(self) -> Iterator[Tuple[Tuple[float, float, float], SnapshotSeries]]:
+    def __iter__(
+        self,
+    ) -> Iterator[Tuple[Tuple[Tuple[float, float, float], float], Snapshot]]:
         for center, series in self.series_dict.items():
-            yield (center, series)
+            for timestamp, snapshot in series:
+                yield (center, timestamp), snapshot
 
     def __getitem__(
         self, key: Union[Tuple[float, float, float], float]

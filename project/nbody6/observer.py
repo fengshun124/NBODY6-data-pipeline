@@ -215,21 +215,21 @@ class PseudoObserver:
                     ["obj1_ids", "obj2_ids"]
                 ].to_numpy()
             ]
-            bin_sys_df["is_unresolved_binary"] = (
+            bin_sys_df["is_unresolved_binary_system"] = (
                 bin_sys_df["semi"]
                 <= bin_sys_df["dist_obs_pc"] * self.UNRESOLVED_SEP_FACTOR
             )
 
             # names participating in resolved systems
             resolved_star_names = set(
-                bin_sys_df[~bin_sys_df["is_unresolved_binary"]][
+                bin_sys_df[~bin_sys_df["is_unresolved_binary_system"]][
                     ["obj1_ids", "obj2_ids"]
                 ]
                 .stack()
                 .explode()
             )
         else:
-            bin_sys_df["is_unresolved_binary"] = pd.Series(dtype=bool)
+            bin_sys_df["is_unresolved_binary_system"] = pd.Series(dtype=bool)
             resolved_star_names = set()
 
         resolved_stars_df = (
@@ -239,7 +239,9 @@ class PseudoObserver:
         )
 
         # unresolved systems -> merged measurements
-        unresolved_bin_sys_df = bin_sys_df[bin_sys_df["is_unresolved_binary"]].copy()
+        unresolved_bin_sys_df = bin_sys_df[
+            bin_sys_df["is_unresolved_binary_system"]
+        ].copy()
         unresolved_stars_df = self._merge_unresolved_systems(
             unresolved_bin_sys_df=unresolved_bin_sys_df,
             name_attr_map=name_attr_map,

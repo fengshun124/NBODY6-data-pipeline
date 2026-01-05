@@ -231,6 +231,19 @@ class SnapshotAssembler:
                 "n_stars_within_2x_r_tidal": int(
                     (stars_df["dist_dc_r_tidal"] <= 2).sum()
                 ),
+                "total_mass": float(round(stars_df["mass"].sum(), 4)),
+                "total_mass_within_r_tidal": float(
+                    round(
+                        stars_df.loc[stars_df["dist_dc_r_tidal"] <= 1, "mass"].sum(),
+                        4,
+                    )
+                ),
+                "total_mass_within_2x_r_tidal": float(
+                    round(
+                        stars_df.loc[stars_df["dist_dc_r_tidal"] <= 2, "mass"].sum(),
+                        4,
+                    )
+                ),
             },
         )
 
@@ -480,7 +493,7 @@ class SnapshotAssembler:
             ),
             **star_stat_dict,
             **bin_sys_stat_dict,
-            "r_tidal_OUT34": np.round(o34_file_block.header["rtide"], 4),
+            "r_tidal_OUT34": round(o34_file_block.header["rtide"], 4),
             "density_center_OUT34": tuple(
                 np.round(o34_file_block.header["rd"], 4).tolist()
             ),
