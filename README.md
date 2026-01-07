@@ -25,14 +25,14 @@ graph TD
 The following table lists the essential files produced by N-Body6 and processed by this project.
 Each file contains data at multiple timestamps `time` in Myr:
 
-| File Name          | Description                                                                                                                                                                            | _Essential_ Columns                                                                                                                                                                                            | _Essential_ Header                                                                  |
-|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------|
-| **OUT34**          | Position and velocity of ALL single stars, unregularized binaries and the centers of mass of regularized binaries (`cmName`).                                                          | `name`, `x`, `y`, `z` [$\mathrm{pc}$], `vx`, `vy`, `vz` [$\mathrm{km\,s}^{-1}$]                                                                                                                                | `time`, galactic position (`rg`$\times$`rbar`), bulk velocity (`vg`$\times$`vstar`) |
-| **OUT9**           | Pairing information and orbital attributes of **regularized binaries**. Each row links two component stars (`name1`, `name2`) to their common center of mass (`cmName`).               | `cmName`, `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                             | `time`                                                                              |
-| **fort.82**        | Stellar properties for both components of **regularized binaries**.                                                                                                                    | `name1`, `name2`, `mass1`, `mass2` [$\mathrm{M}_{\odot}$], `rad1`, `rad2` [$\log_{10}(\mathrm{R}_{\odot})$], `zlum1`, `zlum2` [$\log_{10}(\mathrm{L}_{\odot})$], `tempe1` `tempe2` [$\log_{10}({\mathrm{K}})$] | `time`                                                                              |
-| **fort.83**        | Stellar properties for **single stars** and **unregularized binaries**.                                                                                                                | `name`, `mass` [$\mathrm{M}_{\odot}$], `rad` [$\log_{10}(\mathrm{R}_{\odot})$], `zlum` [$\log_{10}(\mathrm{L}_{\odot})$], `tempe` [$\log_{10}({\mathrm{K}})$]                                                  | `time`                                                                              |
-| **fort.19**        | Pairing information for **unregularized binaries**. Binary components (`name1` / `name2`) may reference regularized binary centers (`cmName`).                                         | `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                                       | `time`                                                                              |
-| **densCentre.txt** | Recalculated cluster density center and tidal radius from density profile analysis. Used as the primary reference for all distance calculations. NOT a vanilla output of N-Body6 code. | `time`, `r_tidal` [$\mathrm{pc}$], `density_center_x`, `density_center_y`, `density_center_z` [$\mathrm{pc}$]                                                                                                  | — (data serves as header)                                                           |
+|     File Name      | Description                                                                                                                                                                            | _Essential_ Columns                                                                                                                                                                                            | _Essential_ Header                                                                    |
+| :----------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+|     **OUT34**      | Position and velocity of ALL single stars, unregularized binaries and the centers of mass of regularized binaries (`cmName`).                                                          | `name`, `x`, `y`, `z` $[\mathrm{pc}]$, `vx`, `vy`, `vz` $[\mathrm{km\,s}^{-1}]$                                                                                                                                | `time`, galactic position (`rg` $\cdot$ `rbar`), bulk velocity (`vg` $\cdot$ `vstar`) |
+|      **OUT9**      | Pairing information and orbital attributes of **regularized binaries**. Each row links two component stars (`name1`, `name2`) to their common center of mass (`cmName`).               | `cmName`, `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                             | `time`                                                                                |
+|    **fort.82**     | Stellar properties for both components of **regularized binaries**.                                                                                                                    | `name1`, `name2`, `mass1`, `mass2` $[\mathrm{M}_{\odot}]$, `rad1`, `rad2` $[\log_{10}(\mathrm{R}_{\odot})]$, `zlum1`, `zlum2` $[\log_{10}(\mathrm{L}_{\odot})]$, `tempe1` `tempe2` $[\log_{10}({\mathrm{K}})]$ | `time`                                                                                |
+|    **fort.83**     | Stellar properties for **single stars** and **unregularized binaries**.                                                                                                                | `name`, `mass` $[\mathrm{M}_{\odot}]$, `rad` $[\log_{10}(\mathrm{R}_{\odot})]$, `zlum` $[\log_{10}(\mathrm{L}_{\odot})]$, `tempe` $[\log_{10}({\mathrm{K}})]$                                                  | `time`                                                                                |
+|    **fort.19**     | Pairing information for **unregularized binaries**. Binary components (`name1` / `name2`) may reference regularized binary centers (`cmName`).                                         | `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                                       | `time`                                                                                |
+| **densCentre.txt** | Recalculated cluster density center and tidal radius from density profile analysis. Used as the primary reference for all distance calculations. NOT a vanilla output of N-Body6 code. | `time`, `r_tidal` $[\mathrm{pc}]$, `density_center_x`, `density_center_y`, `density_center_z` $[\mathrm{pc}]$                                                                                                  | — (data serves as header)                                                             |
 
 These files are parsed by specialized `FileParser` classes, coordinated by the `NBody6DataLoader`.  
 The parsed data is then assembled by the `SnapshotAssembler` into `Snapshot` objects.
@@ -60,31 +60,31 @@ The collected N-Body6 data is structured into `Snapshot` and `SnapshotSeries` cl
 Each `Snapshot` represents the cluster state at a single timestamp `time`
 and contains two primary `pandas.DataFrame` objects and a dictionary of header metadata:
 
-| Component          | Description                                                                              | _Essential_ Columns                                                                                                 |
-|--------------------|------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------|
-| **stars**          | Position, velocity and stellar attributes for all stars (singles and binary components). | `name`, `x`, `y`, `z`, `vx`, `vy`, `vz`, `mass`, `log_R_R_sol` (`rad`), `log_L_L_sol` (`zlum`), `log_T_K` (`tempe`) |
-| **binary_systems** | Pairing and orbital attributes for all binaries (regularized and unregularized).         | `pair`, `obj1_ids`, `obj2_ids`, `ecc`, `log_period_days` (`p`), `semi` [$\mathrm{AU}$]                              |
-| **header**         | Snapshot metadata including cluster properties and summary statistics.                   | `time`, `r_tidal`, `r_half_mass`, `total_mass`, etc.                                                                |
+|     Component      | Description                                                                              | _Essential_ Columns                                                                                                 |
+| :----------------: | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+|     **stars**      | Position, velocity and stellar attributes for all stars (singles and binary components). | `name`, `x`, `y`, `z`, `vx`, `vy`, `vz`, `mass`, `log_R_R_sol` (`rad`), `log_L_L_sol` (`zlum`), `log_T_K` (`tempe`) |
+| **binary_systems** | Pairing and orbital attributes for all binaries (regularized and unregularized).         | `pair`, `obj1_ids`, `obj2_ids`, `ecc`, `log_period_days` (`p`), `semi` $[\mathrm{AU}]$                              |
+|     **header**     | Snapshot metadata including cluster properties and summary statistics.                   | `time`, `r_tidal`, `r_half_mass`, `total_mass`, etc.                                                                |
 
 **Key Metrics** include:
 
-| Metric                       | Formula or Definition                                                                                   |
-|------------------------------|---------------------------------------------------------------------------------------------------------|
-| **`dist_dc_pc`**             | Distance to density center $d_{\text{dc,pc}} = \sqrt{(x - x_{dc})^2 + (y - y_{dc})^2 + (z - z_{dc})^2}$ |
-| **`r_half_mass`**            | Half-mass radius enclosing 50% of total mass **within $2r_{\text{tidal}}$**                             |
-| **`dist_dc_r_tidal`**        | Normalized distance: `dist_dc_pc / r_tidal`                                                             |
-| **`dist_dc_r_half_mass`**    | Normalized distance: `dist_dc_pc / r_half_mass`                                                         |
+|            Metric            | Formula or Definition                                                                                   |
+| :--------------------------: | ------------------------------------------------------------------------------------------------------- |
+|       **`dist_dc_pc`**       | Distance to density center $d_{\text{dc,pc}} = \sqrt{(x - x_{dc})^2 + (y - y_{dc})^2 + (z - z_{dc})^2}$ |
+|      **`r_half_mass`**       | Half-mass radius enclosing 50% of total mass **within $2r_{\text{tidal}}$**                             |
+|    **`dist_dc_r_tidal`**     | Normalized distance: `dist_dc_pc / r_tidal`                                                             |
+|  **`dist_dc_r_half_mass`**   | Normalized distance: `dist_dc_pc / r_half_mass`                                                         |
 | **`is_within_(2x_)r_tidal`** | Boolean: `dist_dc_pc` $\leqslant$ ($2\times$) `r_tidal`                                                 |
 
 *_All radial quantities are measured relative to the density center from <u>densCentre.txt</u>._
 
 Binary systems are classified as follows:
 
-| Type                         | Criteria                                                                                  |
-|------------------------------|-------------------------------------------------------------------------------------------|
-| **`is_wide_binary`**         | $a>1\,000\,\mathrm{AU}$                                                                   |
-| **`is_hard_binary`**         | $a<{r_\mathrm{hm}}/{N_\mathrm{star}}$ (Heggie’s criterion)                                |
-| **`is_multi_system`**        | System involves more than 2 individual stars (len(`obj1_ids`) > 1 OR len(`obj2_ids`) > 1) |
+|             Type             | Criteria                                                                                  |
+| :--------------------------: | ----------------------------------------------------------------------------------------- |
+|     **`is_wide_binary`**     | $a>1\,000\,\mathrm{AU}$                                                                   |
+|     **`is_hard_binary`**     | $a<{r_\mathrm{hm}}/{N_\mathrm{star}}$ (Heggie’s criterion)                                |
+|    **`is_multi_system`**     | System involves more than 2 individual stars (len(`obj1_ids`) > 1 OR len(`obj2_ids`) > 1) |
 | **`is_within_(2x_)r_tidal`** | Boolean: **ALL** component stars satisfy `is_within_(2x_)r_tidal`.                        |
 
 A `SnapshotSeries` is a temporal sequence of `Snapshot` objects that stores the complete simulation.
@@ -135,10 +135,6 @@ Given the properties of two objects (1 and 2), the merged properties are calcula
 
 For hierarchical systems, these formulas are applied recursively at each merging step.
 
-#### :construction: [TODO] Magnitude Cuts
-
-~~Stars fainter than a specified absolute magnitude threshold (e.g., $M_g > 18$) are excluded.~~
-
 ## Statistics and Visualization
 
 After generating pseudo-observed snapshots, statistical analyses and visualizations are performed
@@ -152,3 +148,15 @@ N-Body6 simulations output snapshots at adaptive timestamps that vary between ru
 To compare between runs, the time series of metrics (e.g., `r_tidal`, `binary_fraction`)
 are temporally aligned to a uniform 1 Myr grid within its range to avoid over-interpolation artifacts.
 Once aligned, metrics from different `init_pos` runs are aggregated and visualized.
+
+## :construction: Future Work
+
+Extend `PseudoObserver` with a more sophisticated observation simulation step:
+
+1. assigns an spectral energy distribution (SED) to each star;
+2. projects the SED onto target passbands (e.g., Gaia G/BP/RP) to obtain absolute magnitudes/colors;
+3. applies distance modulus + extinction to get apparent magnitudes; and
+4. applies a magnitude limit / completeness model (optionally adding photometric noise and simple blending approximations).
+
+Available tools include [`synphot`](https://synphot.readthedocs.io/) for bandpasses/extinction and photometry calculations, plus [`speclite`](https://speclite.readthedocs.io/) and [`sedpy`](https://sedpy.readthedocs.io/) for filter/transmission curve utilities and lightweight SED -> magnitude projections.
+
