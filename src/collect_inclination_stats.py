@@ -1,66 +1,23 @@
 import gc
 import json
 import logging
-import os
-import re
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Dict, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from dotenv import load_dotenv
 from joblib import Parallel, delayed
-
 from nbody6.assembler import SnapshotAssembler
 from nbody6.data import Snapshot, SnapshotSeries
 from nbody6.loader import NBody6DataLoader
-
-load_dotenv()
-
-
-SIM_ROOT_BASE = Path(os.getenv("SIM_ROOT_BASE")).resolve()
-OUTPUT_BASE = Path(os.getenv("OUTPUT_BASE")).resolve()
-SIM_ATTR_PATTERN = re.compile(r"Rad(\d{2})/zmet(\d{4})/M(\d)/(\d{4})")
-
-
-def setup_logger(log_file):
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="[%(asctime)s][%(processName)s][%(levelname)s] %(message)s",
-        datefmt="%H:%M:%S",
-        handlers=[
-            logging.StreamHandler(),
-            RotatingFileHandler(log_file, maxBytes=5_000_000, backupCount=3),
-        ],
-        force=True,
-    )
+from utils import (
+    OUTPUT_BASE,
+    SIM_ROOT_BASE,
+    fetch_sim_root,
+    setup_logger,
+)
 
 
-def fetch_simulation_root(base_path: Path):
-    if not (base_path := Path(base_path).resolve()).is_dir():
-        raise ValueError(f"Base path {base_path} is not a directory.")
-
-    simulations = []
-    for path in base_path.rglob("*"):
-        if path.is_dir() and len(path.parts[-4:]) == 4:
-            if m := SIM_ATTR_PATTERN.match("/".join(path.parts[-4:])):
-                simulations.append(
-                    (
-                        {
-                            "init_gc_radius": int(m.group(1)),
-                            "init_metallicity": int(m.group(2)),
-                            "init_mass_lv": int(m.group(3)),
-                            "init_pos": int(m.group(4)),
-                        },
-                        path,
-                        f"Rad{int(m.group(1)):02d}-zmet{int(m.group(2)):04d}-M{int(m.group(3))}-{int(m.group(4)):04d}",
-                    )
-                )
-    return sorted(simulations, key=lambda x: x[0]["init_mass_lv"])
-
-
-def calc_inclination(r, v, m):
+def calc_inclination(r: np.ndarray, v: np.ndarray, m: np.ndarray) -> float:
     # compute CoM position
     r_com = np.average(r, weights=m, axis=0)
     r_prime = r - r_com
@@ -72,7 +29,7 @@ def calc_inclination(r, v, m):
     return inclination
 
 
-def summarize_inclination(snapshot: Snapshot) -> Dict[str, Union[Tuple[float], float]]:
+def summarize_inclination(snapshot: Snapshot) -> dict[str, object]:
     star_df = snapshot.stars.copy()
     within_r_tidal_star_df = star_df[star_df["is_within_r_tidal"]].copy()
     # remove bulk velocity calculated from stars within r_tidal
@@ -137,37 +94,41 @@ def summarize_inclination(snapshot: Snapshot) -> Dict[str, Union[Tuple[float], f
         "radian": json.dumps(
             [float(inc) if not np.isnan(inc) else None for inc in raw_inclinations]
         ),
-        "radian_mean": float(np.mean(valid_inclinations))
-        if len(valid_inclinations) > 0
-        else None,
-        "radian_std": float(np.std(valid_inclinations))
-        if len(valid_inclinations) > 0
-        else None,
+        "radian_mean": (
+            float(np.mean(valid_inclinations)) if len(valid_inclinations) > 0 else None
+        ),
+        "radian_std": (
+            float(np.std(valid_inclinations)) if len(valid_inclinations) > 0 else None
+        ),
         "degree": json.dumps(
             [
                 float(np.degrees(inc)) if not np.isnan(inc) else None
                 for inc in raw_inclinations
             ]
         ),
-        "degree_mean": float(np.degrees(np.mean(valid_inclinations)))
-        if len(valid_inclinations) > 0
-        else None,
-        "degree_std": float(np.degrees(np.std(valid_inclinations)))
-        if len(valid_inclinations) > 0
-        else None,
+        "degree_mean": (
+            float(np.degrees(np.mean(valid_inclinations)))
+            if len(valid_inclinations) > 0
+            else None
+        ),
+        "degree_std": (
+            float(np.degrees(np.std(valid_inclinations)))
+            if len(valid_inclinations) > 0
+            else None
+        ),
     }
 
 
 def process(
-    sim_path: Union[Path, str],
+    sim_path: Path | str,
     sim_exp_label: str,
-    sim_attr_dict: Dict[str, Union[int, float]],
+    sim_attr_dict: dict[str, int | float],
     log_file: str,
 ) -> None:
     # prepare directories & logger
     raw_dir = OUTPUT_BASE / "cache" / "raw"
     inclination_stats_dir = OUTPUT_BASE / "inclination_stats"
-    log_dir = OUTPUT_BASE / "logs"
+    log_dir = OUTPUT_BASE / "log"
     for p in [raw_dir, inclination_stats_dir, log_dir]:
         p.mkdir(parents=True, exist_ok=True)
     setup_logger(log_dir / log_file)
@@ -199,13 +160,10 @@ def process(
 
             series.to_joblib(cached_snapshot_series_joblib)
 
-            del series
+            del loader, assembler
             gc.collect()
 
         logging.info(f"[{sim_exp_label}] Calculating inclination statistics ...")
-
-        for _, snapshot in series:
-            summarize_inclination(snapshot)
 
         inclination_stats_df = pd.DataFrame(
             [
@@ -230,8 +188,8 @@ def process(
         gc.collect()
 
 
-def process_all(log_file="batch.log"):
-    simulations = fetch_simulation_root(SIM_ROOT_BASE)
+def process_all(log_file: str = "batch.log") -> None:
+    simulations = fetch_sim_root(SIM_ROOT_BASE)
 
     def run(sim_dict, sim_path, sim_label):
         process(

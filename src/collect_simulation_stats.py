@@ -1,67 +1,26 @@
 import gc
 import logging
-import os
-import re
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Dict, Union
 
 import numpy as np
-from dotenv import load_dotenv
 from joblib import Parallel, delayed
+
 from nbody6.assembler import SnapshotAssembler
 from nbody6.data import SnapshotSeries, SnapshotSeriesCollection
 from nbody6.loader import NBody6DataLoader
 from nbody6.observer import PseudoObserver
-
-load_dotenv()
-
-
-SIM_ROOT_BASE = Path(os.getenv("SIM_ROOT_BASE")).resolve()
-OUTPUT_BASE = Path(os.getenv("OUTPUT_BASE")).resolve()
-SIM_ATTR_PATTERN = re.compile(r"Rad(\d{2})/zmet(\d{4})/M(\d)/(\d{4})")
-
-
-def setup_logger(log_file):
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="[%(asctime)s][%(processName)s][%(levelname)s] %(message)s",
-        datefmt="%H:%M:%S",
-        handlers=[
-            logging.StreamHandler(),
-            RotatingFileHandler(log_file, maxBytes=5_000_000, backupCount=3),
-        ],
-        force=True,
-    )
-
-
-def fetch_simulation_root(base_path: Path):
-    if not (base_path := Path(base_path).resolve()).is_dir():
-        raise ValueError(f"Base path {base_path} is not a directory.")
-
-    simulations = []
-    for path in base_path.rglob("*"):
-        if path.is_dir() and len(path.parts[-4:]) == 4:
-            if m := SIM_ATTR_PATTERN.match("/".join(path.parts[-4:])):
-                simulations.append(
-                    (
-                        {
-                            "init_gc_radius": int(m.group(1)),
-                            "init_metallicity": int(m.group(2)),
-                            "init_mass_lv": int(m.group(3)),
-                            "init_pos": int(m.group(4)),
-                        },
-                        path,
-                        f"Rad{int(m.group(1)):02d}-zmet{int(m.group(2)):04d}-M{int(m.group(3))}-{int(m.group(4)):04d}",
-                    )
-                )
-    return sorted(simulations, key=lambda x: x[0]["init_mass_lv"])
+from utils import (
+    OUTPUT_BASE,
+    SIM_ROOT_BASE,
+    fetch_sim_root,
+    setup_logger,
+)
 
 
 def process(
-    sim_path: Union[Path, str],
+    sim_path: Path | str,
     sim_exp_label: str,
-    sim_attr_dict: Dict[str, Union[int, float]],
+    sim_attr_dict: dict[str, int | float],
     log_file: str,
 ) -> None:
     # prepare directories & logger
@@ -69,7 +28,7 @@ def process(
     obs_dir = OUTPUT_BASE / "cache" / "obs"
     overall_stats_dir = OUTPUT_BASE / "overall_stats"
     annular_stats_dir = OUTPUT_BASE / "annular_stats"
-    log_dir = OUTPUT_BASE / "logs"
+    log_dir = OUTPUT_BASE / "log"
     for p in [raw_dir, obs_dir, overall_stats_dir, annular_stats_dir, log_dir]:
         p.mkdir(parents=True, exist_ok=True)
     setup_logger(log_dir / log_file)
@@ -152,8 +111,8 @@ def process(
         gc.collect()
 
 
-def process_all(log_file="batch.log"):
-    simulations = fetch_simulation_root(SIM_ROOT_BASE)
+def process_all(log_file: str = "batch.log") -> None:
+    simulations = fetch_sim_root(SIM_ROOT_BASE)
 
     def run(sim_dict, sim_path, sim_label):
         process(
@@ -186,16 +145,16 @@ def process_all(log_file="batch.log"):
 
 
 if __name__ == "__main__":
-    # process_all(log_file="batch.log")
+    process_all(log_file="batch.log")
 
-    process(
-        sim_path=SIM_ROOT_BASE / "Rad12/zmet0014/M8/0509",
-        sim_exp_label="Rad12-zmet0014-M8-0509",
-        sim_attr_dict={
-            "init_gc_radius": 12,
-            "init_metallicity": 14,
-            "init_mass_lv": 8,
-            "init_pos": 509,
-        },
-        log_file="test.log",
-    )
+    # process(
+    #     sim_path=SIM_ROOT_BASE / "Rad12/zmet0014/M8/0509",
+    #     sim_exp_label="Rad12-zmet0014-M8-0509",
+    #     sim_attr_dict={
+    #         "init_gc_radius": 12,
+    #         "init_metallicity": 14,
+    #         "init_mass_lv": 8,
+    #         "init_pos": 509,
+    #     },
+    #     log_file="test.log",
+    # )

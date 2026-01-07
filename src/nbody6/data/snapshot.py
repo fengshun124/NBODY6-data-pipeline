@@ -1,7 +1,7 @@
 import pickle
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, Optional, Tuple, Union
+from typing import Callable, Dict
 
 import joblib
 import numpy as np
@@ -12,24 +12,24 @@ from nbody6.calc.summary import summarize_descriptive_stats
 try:
     from nbody6.calc.cluster import Coordinate3D
 except Exception:
-    Coordinate3D = Tuple[float, float, float]
+    Coordinate3D = tuple[float, float, float]
 
 
 @dataclass(slots=True)
 class Snapshot:
     time: float
-    header: Dict[str, Union[int, float, str, Tuple[float, float, float]]]
+    header: dict[str, int | float | str | tuple[float, float, float]]
     stars: pd.DataFrame
     binary_systems: pd.DataFrame
 
     # caches
-    _cache_stats: Optional[pd.DataFrame] = field(default=None, init=False, repr=False)
-    _cache_bin_annular_stats: Optional[pd.DataFrame] = field(
+    _cache_stats: pd.DataFrame | None = field(default=None, init=False, repr=False)
+    _cache_bin_annular_stats: pd.DataFrame | None = field(
         default=None, init=False, repr=False
     )
 
     # parent invalidation hook (set by containers)
-    _parent_invalidator: Optional[Callable[[], None]] = field(
+    _parent_invalidator: Callable[[], None] | None = field(
         default=None, init=False, repr=False
     )
 
@@ -47,16 +47,16 @@ class Snapshot:
                 )
 
     # cache management
-    def _clear_cache(self):
+    def _clear_cache(self) -> None:
         self._cache_stats = None
         self._cache_bin_annular_stats = None
 
-    def _invalidate_self_and_parent(self):
+    def _invalidate_self_and_parent(self) -> None:
         self._clear_cache()
         if self._parent_invalidator is not None:
             self._parent_invalidator()
 
-    def __setattr__(self, name, value) -> None:
+    def __setattr__(self, name: str, value) -> None:
         if hasattr(self, "_cache_summary") and name in [
             "time",
             "header",
@@ -82,7 +82,7 @@ class Snapshot:
     def __len__(self) -> int:
         return len(self.stars)
 
-    def to_dict(self, is_materialize: bool = True) -> Dict:
+    def to_dict(self, is_materialize: bool = True) -> dict:
         if is_materialize:
             return {
                 "time": float(self.time),
@@ -98,45 +98,45 @@ class Snapshot:
                 "binary_systems": self.binary_systems,
             }
 
-    def to_pickle(
-        self, filepath: Union[str, Path], enforce_overwrite: bool = False
-    ) -> None:
+    def to_pickle(self, filepath: Path | str, enforce_overwrite: bool = False) -> None:
         filepath = Path(filepath).resolve()
         if filepath.exists() and not enforce_overwrite:
             raise FileExistsError(f"{filepath} already exists.")
         with open(filepath, "wb") as f:
             pickle.dump(self.to_dict(is_materialize=True), f)
 
-    def to_joblib(
-        self, filepath: Union[str, Path], enforce_overwrite: bool = False
-    ) -> None:
+    def to_joblib(self, filepath: Path | str, enforce_overwrite: bool = False) -> None:
         filepath = Path(filepath).resolve()
         if filepath.exists() and not enforce_overwrite:
             raise FileExistsError(f"{filepath} already exists.")
         joblib.dump(self.to_dict(is_materialize=False), filepath, compress=3)
 
     @classmethod
-    def from_dict(cls, data: Dict) -> "Snapshot":
+    def from_dict(cls, data: dict) -> "Snapshot":
         return cls(
             time=float(data["time"]),
             header=dict(data["header"]),
-            stars=pd.DataFrame(data["stars"])
-            if isinstance(data["stars"], list)
-            else data["stars"],
-            binary_systems=pd.DataFrame(data["binary_systems"])
-            if isinstance(data["binary_systems"], list)
-            else data["binary_systems"],
+            stars=(
+                pd.DataFrame(data["stars"])
+                if isinstance(data["stars"], list)
+                else data["stars"]
+            ),
+            binary_systems=(
+                pd.DataFrame(data["binary_systems"])
+                if isinstance(data["binary_systems"], list)
+                else data["binary_systems"]
+            ),
         )
 
     @classmethod
-    def from_pickle(cls, filepath: Union[str, Path]) -> "Snapshot":
+    def from_pickle(cls, filepath: Path | str) -> "Snapshot":
         filepath = Path(filepath)
         with open(filepath, "rb") as f:
             data = pickle.load(f)
         return cls.from_dict(data)
 
     @classmethod
-    def from_joblib(cls, filepath: Union[str, Path]) -> "Snapshot":
+    def from_joblib(cls, filepath: Path | str) -> "Snapshot":
         filepath = Path(filepath)
         data = joblib.load(filepath)
         return cls.from_dict(data)
@@ -184,12 +184,16 @@ class Snapshot:
                 mask_specs.append(
                     (
                         f"within_{radius_label}_",
-                        stars_df[col_name].to_numpy(dtype=bool, copy=False)
-                        if not stars_df.empty
-                        else None,
-                        bin_sys_df[col_name].to_numpy(dtype=bool, copy=False)
-                        if not bin_sys_df.empty
-                        else None,
+                        (
+                            stars_df[col_name].to_numpy(dtype=bool, copy=False)
+                            if not stars_df.empty
+                            else None
+                        ),
+                        (
+                            bin_sys_df[col_name].to_numpy(dtype=bool, copy=False)
+                            if not bin_sys_df.empty
+                            else None
+                        ),
                     )
                 )
 
@@ -315,9 +319,9 @@ class Snapshot:
 
         # extract binary system type columns
         bin_sys_type_cols = [
-            f"is_{bin_type}_binary"
+            f"is_{bin_type}_binary_system"
             for bin_type in ["wide", "hard", "unresolved"]
-            if f"is_{bin_type}_binary" in bin_sys_df.columns
+            if f"is_{bin_type}_binary_system" in bin_sys_df.columns
         ]
 
         annular_stats_dfs = []
@@ -487,19 +491,27 @@ class PseudoObservedSnapshot(Snapshot):
         return cls(
             time=float(data["time"]),
             header=dict(data["header"]),
-            stars=pd.DataFrame(data["stars"])
-            if isinstance(data["stars"], list)
-            else data["stars"],
-            binary_systems=pd.DataFrame(data["binary_systems"])
-            if isinstance(data["binary_systems"], list)
-            else data["binary_systems"],
+            stars=(
+                pd.DataFrame(data["stars"])
+                if isinstance(data["stars"], list)
+                else data["stars"]
+            ),
+            binary_systems=(
+                pd.DataFrame(data["binary_systems"])
+                if isinstance(data["binary_systems"], list)
+                else data["binary_systems"]
+            ),
             sim_galactic_center=sim_gc,
-            raw_stars=pd.DataFrame(data["raw_stars"])
-            if isinstance(data["raw_stars"], list)
-            else data["raw_stars"],
-            raw_binary_systems=pd.DataFrame(data["raw_binary_systems"])
-            if isinstance(data["raw_binary_systems"], list)
-            else data["raw_binary_systems"],
+            raw_stars=(
+                pd.DataFrame(data["raw_stars"])
+                if isinstance(data["raw_stars"], list)
+                else data["raw_stars"]
+            ),
+            raw_binary_systems=(
+                pd.DataFrame(data["raw_binary_systems"])
+                if isinstance(data["raw_binary_systems"], list)
+                else data["raw_binary_systems"]
+            ),
         )
 
     @property

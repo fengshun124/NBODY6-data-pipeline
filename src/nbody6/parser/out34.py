@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Union
 
 import numpy as np
 
@@ -35,5 +34,5 @@ OUT34_PARSER_CONFIG = FileParserConfig(
 
 
 class OUT34Parser(FileParserBase):
-    def __init__(self, path: Union[str, Path]) -> None:
+    def __init__(self, path: str | Path) -> None:
         super().__init__(path, OUT34_PARSER_CONFIG)

@@ -1,14 +1,13 @@
 from pathlib import Path
-from typing import Union
 
 from nbody6.parser.base import FileParserBase, FileParserConfig
 
-OUT9_PARSER_CONFIG = FileParserConfig(
+FORT19_PARSER_CONFIG = FileParserConfig(
     header_prefix="#",
-    header_length=3,
+    header_length=1,
     header_schema={
-        "time": (1, float),
-        "npairs": (2, int),
+        "time": (0, float),
+        "npairs": (1, int),
     },
     data_schema={
         "ecc": (3, float),
@@ -20,11 +19,11 @@ OUT9_PARSER_CONFIG = FileParserConfig(
         "name2": (9, int),
         # "kstar1": (10, int),
         # "kstar2": (11, int),
-        "cmName": (13, int),
+        "hiarch": (12, int),
     },
 )
 
 
-class OUT9Parser(FileParserBase):
-    def __init__(self, path: Union[str, Path]) -> None:
-        super().__init__(path, OUT9_PARSER_CONFIG)
+class Fort19Parser(FileParserBase):
+    def __init__(self, path: str | Path) -> None:
+        super().__init__(path, FORT19_PARSER_CONFIG)

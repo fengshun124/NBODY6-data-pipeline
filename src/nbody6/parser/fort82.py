@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Union
 
 from nbody6.parser.base import FileParserBase, FileParserConfig
 
@@ -27,5 +26,5 @@ FORT82_PARSER_CONFIG = FileParserConfig(
 
 
 class Fort82Parser(FileParserBase):
-    def __init__(self, path: Union[str, Path]) -> None:
+    def __init__(self, path: str | Path) -> None:
         super().__init__(path, FORT82_PARSER_CONFIG)

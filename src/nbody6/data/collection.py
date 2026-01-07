@@ -1,7 +1,7 @@
 import pickle
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Callable, Iterator
 
 import joblib
 import pandas as pd
@@ -14,18 +14,18 @@ from nbody6.data.snapshot import Snapshot
 
 @dataclass(slots=True)
 class SnapshotSeriesCollection:
-    series_dict: Dict[Coordinate3D, SnapshotSeries]
+    series_dict: dict[Coordinate3D, SnapshotSeries]
 
-    _cache_stats: Optional[pd.DataFrame] = field(default=None, init=False, repr=False)
-    _cache_binary_annular: Optional[pd.DataFrame] = field(
+    _cache_stats: pd.DataFrame | None = field(default=None, init=False, repr=False)
+    _cache_binary_annular: pd.DataFrame | None = field(
         default=None, init=False, repr=False
     )
 
-    _parent_invalidator: Optional[Callable[[], None]] = field(
+    _parent_invalidator: Callable[[], None] | None = field(
         default=None, init=False, repr=False
     )
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.series_dict:
             return
 
@@ -46,7 +46,7 @@ class SnapshotSeriesCollection:
         self._bind_children()
 
     # cache management
-    def _clear_cache(self):
+    def _clear_cache(self) -> None:
         self._cache_stats = None
         self._cache_binary_annular = None
         if self._parent_invalidator is not None:
@@ -62,7 +62,7 @@ class SnapshotSeriesCollection:
             return
         object.__setattr__(self, name, value)
 
-    def _bind_children(self):
+    def _bind_children(self) -> None:
         for series in self.series_dict.values():
             try:
                 series._parent_invalidator = self._clear_cache
@@ -72,7 +72,7 @@ class SnapshotSeriesCollection:
     def __len__(self) -> int:
         return len(self.series_dict)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"{type(self).__name__}("
             f"num_series={len(self.series_dict)}, "
@@ -82,14 +82,14 @@ class SnapshotSeriesCollection:
 
     def __iter__(
         self,
-    ) -> Iterator[Tuple[Tuple[Tuple[float, float, float], float], Snapshot]]:
+    ) -> Iterator[tuple[tuple[tuple[float, float, float], float], Snapshot]]:
         for center, series in self.series_dict.items():
             for timestamp, snapshot in series:
                 yield (center, timestamp), snapshot
 
     def __getitem__(
-        self, key: Union[Tuple[float, float, float], float]
-    ) -> Union[SnapshotSeries, Dict[Tuple[float, float, float], Snapshot]]:
+        self, key: tuple[float, float, float] | float
+    ) -> SnapshotSeries | dict[tuple[float, float, float], Snapshot]:
         if isinstance(key, tuple) and len(key) == 3:
             return self.series_dict[key]
         elif isinstance(key, (int, float)):
@@ -100,18 +100,18 @@ class SnapshotSeriesCollection:
             )
 
     @property
-    def timestamps(self) -> List[float]:
+    def timestamps(self) -> list[float]:
         if not self.series_dict:
             return []
         return sorted(next(iter(self.series_dict.values())).timestamps)
 
     @property
-    def timestamp_stats(self) -> Dict[str, Dict[str, Optional[float]]]:
+    def timestamp_stats(self) -> dict[str, dict[str, float | None]]:
         return summarize_timestamp_stats(self.timestamps)
 
     def iter_by_time(
         self,
-    ) -> Iterator[Tuple[float, Dict[Tuple[float, float, float], Snapshot]]]:
+    ) -> Iterator[tuple[float, dict[tuple[float, float, float], Snapshot]]]:
         for timestamp in self.timestamps:
             snapshots_at_time = {
                 coord: series[timestamp] for coord, series in self.series_dict.items()
@@ -120,20 +120,22 @@ class SnapshotSeriesCollection:
 
     def iter_by_coordinate(
         self,
-    ) -> Iterator[Tuple[Tuple[float, float, float], SnapshotSeries]]:
+    ) -> Iterator[tuple[tuple[float, float, float], SnapshotSeries]]:
         for coord, series in self.series_dict.items():
             yield (coord, series)
 
     def to_dict(
         self, is_materialize: bool = True
-    ) -> Dict[Tuple[float, float, float], Dict]:
+    ) -> dict[tuple[float, float, float], dict]:
         return {
             coord: series.to_dict(is_materialize=is_materialize)
             for coord, series in self.series_dict.items()
         }
 
     def to_pickle(
-        self, filepath: Union[str, Path], enforce_overwrite: bool = False
+        self,
+        filepath: Path | str,
+        enforce_overwrite: bool = False,
     ) -> None:
         filepath = Path(filepath).resolve()
         if filepath.exists() and not enforce_overwrite:
@@ -142,7 +144,9 @@ class SnapshotSeriesCollection:
             pickle.dump(self.to_dict(is_materialize=True), f)
 
     def to_joblib(
-        self, filepath: Union[str, Path], enforce_overwrite: bool = False
+        self,
+        filepath: Path | str,
+        enforce_overwrite: bool = False,
     ) -> None:
         filepath = Path(filepath).resolve()
         if filepath.exists() and not enforce_overwrite:
@@ -150,7 +154,7 @@ class SnapshotSeriesCollection:
         joblib.dump(self.to_dict(is_materialize=False), filepath, compress=3)
 
     @classmethod
-    def from_dict(cls, data: Dict) -> "SnapshotSeriesCollection":
+    def from_dict(cls, data: dict) -> "SnapshotSeriesCollection":
         return cls(
             series_dict={
                 coord: SnapshotSeries.from_dict(series_data)
@@ -159,14 +163,14 @@ class SnapshotSeriesCollection:
         )
 
     @classmethod
-    def from_pickle(cls, filepath: Union[str, Path]) -> "SnapshotSeriesCollection":
+    def from_pickle(cls, filepath: Path | str) -> "SnapshotSeriesCollection":
         filepath = Path(filepath)
         with open(filepath, "rb") as f:
             data = pickle.load(f)
         return cls.from_dict(data)
 
     @classmethod
-    def from_joblib(cls, filepath: Union[str, Path]) -> "SnapshotSeriesCollection":
+    def from_joblib(cls, filepath: Path | str) -> "SnapshotSeriesCollection":
         filepath = Path(filepath)
         data = joblib.load(filepath)
         return cls.from_dict(data)

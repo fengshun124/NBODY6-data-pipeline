@@ -1,13 +1,12 @@
 from pathlib import Path
-from typing import Dict, Union
 
 import numpy as np
 import pandas as pd
 
 from nbody6.parser.base import (
+    FileBlock,
     FileParserBase,
     FileParserConfig,
-    FileBlock,
 )
 
 DENSITY_CENTER_PARSER_CONFIG = FileParserConfig(
@@ -27,10 +26,10 @@ DENSITY_CENTER_PARSER_CONFIG = FileParserConfig(
 
 
 class DensityCenterParser(FileParserBase):
-    def __init__(self, path: Union[str, Path]) -> None:
+    def __init__(self, path: str | Path) -> None:
         super().__init__(path=path, parser_cfg=DENSITY_CENTER_PARSER_CONFIG)
 
-    def parse(self, is_strict: bool = True) -> Dict[float, FileBlock]:
+    def parse(self, is_strict: bool = True) -> dict[float, FileBlock]:
         blocks = super().parse(is_strict)
 
         # assign data value as header for compatibility
