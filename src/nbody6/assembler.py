@@ -1,6 +1,5 @@
 import warnings
 from functools import partial
-from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -18,8 +17,8 @@ class SnapshotAssembler:
     def __init__(self, raw_data: NBody6Data) -> None:
         self._raw_data = raw_data
 
-        self._cache_assembled_dict: Dict[float, Optional[Snapshot]] = {}
-        self._cache_series: Optional[SnapshotSeries] = None
+        self._cache_assembled_dict: dict[float, Snapshot | None] = {}
+        self._cache_series: SnapshotSeries | None = None
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(raw_data={repr(self._raw_data)})"
@@ -76,14 +75,14 @@ class SnapshotAssembler:
         return self._cache_series
 
     @property
-    def cached_assembled_dict(self) -> Dict[float, Snapshot]:
+    def cached_assembled_dict(self) -> dict[float, Snapshot]:
         return {k: v for k, v in self._cache_assembled_dict.items() if v}
 
     def _build_pos_vel_df(
         self,
         o34_file_block: FileBlock,
         o9_file_block: FileBlock,
-    ) -> Tuple[pd.DataFrame, Dict[int, List[int]]]:
+    ) -> tuple[pd.DataFrame, dict[int, list[int]]]:
         atomic_pos_vel_df = o34_file_block.data[["name", *self._POS_VEL_KEYS]].copy()
 
         reg_bin_name_map = (
@@ -112,7 +111,7 @@ class SnapshotAssembler:
         self,
         fort82_file_block: FileBlock,
         fort83_file_block: FileBlock,
-    ) -> Tuple[pd.DataFrame, Dict[int, float]]:
+    ) -> tuple[pd.DataFrame, dict[int, float]]:
         reg_bin_attr_df = pd.concat(
             [
                 fort82_file_block.data.rename(
@@ -143,7 +142,7 @@ class SnapshotAssembler:
         attr_df: pd.DataFrame,
         dc_info_file_block: FileBlock,
         is_strict: bool = True,
-    ) -> Tuple[pd.DataFrame, Dict[int, Dict[str, float]], Dict[str, Union[int, float]]]:
+    ) -> tuple[pd.DataFrame, dict[int, dict[str, float]], dict[str, int | float]]:
         stars_df = (
             pd.merge(
                 left=pos_vel_df,
@@ -252,24 +251,24 @@ class SnapshotAssembler:
         timestamp: float,
         o9_file_block: FileBlock,
         f19_file_block: FileBlock,
-        star_stat_dict: Dict[str, Union[int, float]],
-        reg_bin_name_map: Dict[int, List[int]],
-        mass_map: Dict[int, float],
-        dist_dc_map: Dict[int, Dict[str, float]],
-    ) -> Tuple[pd.DataFrame, Dict[str, Union[int, float]]]:
+        star_stat_dict: dict[str, int | float],
+        reg_bin_name_map: dict[int, list[int]],
+        mass_map: dict[int, float],
+        dist_dc_map: dict[int, dict[str, float]],
+    ) -> tuple[pd.DataFrame, dict[str, int | float]]:
         # generate hierarchical pair name
         def _label_hierarchy(
-            obj1_ids: Union[List[int], Tuple[int, ...]],
-            obj2_ids: Union[List[int], Tuple[int, ...]],
+            obj1_ids: list[int] | tuple[int, ...],
+            obj2_ids: list[int] | tuple[int, ...],
         ) -> str:
-            def _format_ids(ids: Union[List[int], Tuple[int, ...]]) -> str:
+            def _format_ids(ids: list[int] | tuple[int, ...]) -> str:
                 return (
                     "(" + "+".join(map(str, sorted(map(int, ids)))) + ")"
                     if len(ids) != 1
                     else str(int(ids[0]))
                 )
 
-            def _sort_key(label: str) -> Tuple[int, int]:
+            def _sort_key(label: str) -> tuple[int, int]:
                 return (
                     (
                         1,
@@ -287,7 +286,7 @@ class SnapshotAssembler:
             else:
                 return f"{group2}+{group1}"
 
-        def _lookup_dist_dc_map(ids: List[int], map_key: str) -> Optional[float]:
+        def _lookup_dist_dc_map(ids: list[int], map_key: str) -> float | None:
             values = [
                 dist_dc_map.get(i, {}).get(map_key) for i in ids if i in dist_dc_map
             ]
@@ -483,9 +482,9 @@ class SnapshotAssembler:
     def _build_header(
         o34_file_block: FileBlock,
         dc_info_file_block: FileBlock,
-        star_stat_dict: Dict[str, Union[int, float]],
-        bin_sys_stat_dict: Dict[str, Union[int, float]],
-    ) -> Dict[str, Union[int, float, str, Tuple[float, float, float]]]:
+        star_stat_dict: dict[str, int | float],
+        bin_sys_stat_dict: dict[str, int | float],
+    ) -> dict[str, int | float | str | tuple[float, float, float]]:
         return {
             "time": o34_file_block.header["time"],
             "density_center": tuple(
@@ -518,7 +517,7 @@ class SnapshotAssembler:
         self,
         timestamp: float,
         is_strict: bool = True,
-    ) -> Optional[Snapshot]:
+    ) -> Snapshot | None:
         file_block_dict = self._raw_data[timestamp]
         # check if tidal radius is positive
         if file_block_dict["densCentre.txt"].header["r_tidal"] <= 0:
@@ -638,11 +637,11 @@ class SnapshotAssembler:
 
     def assemble_at(
         self,
-        timestamps: Union[float, List[float]],
+        timestamps: float | list[float],
         is_strict: bool = True,
         is_verbose: bool = False,
-    ) -> Dict[float, Optional[Snapshot]]:
-        assembled_dict: Dict[float, Optional[Snapshot]] = {}
+    ) -> dict[float, Snapshot | None]:
+        assembled_dict: dict[float, Snapshot | None] = {}
         for ts in (
             pbar := tqdm(
                 timestamps if isinstance(timestamps, list) else [timestamps],
@@ -680,7 +679,7 @@ class SnapshotAssembler:
         if self._cache_series is not None:
             return self._cache_series
 
-        assembled_dict: Dict[float, Optional[Snapshot]] = {}
+        assembled_dict: dict[float, Snapshot | None] = {}
         for ts in (
             pbar := tqdm(
                 self._raw_data.timestamps,

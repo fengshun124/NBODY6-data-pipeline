@@ -17,7 +17,7 @@ from utils import (
 )
 
 
-def calc_inclination(r: np.ndarray, v: np.ndarray, m: np.ndarray) -> float:
+def _calc_inclination(r: np.ndarray, v: np.ndarray, m: np.ndarray) -> float:
     # compute CoM position
     r_com = np.average(r, weights=m, axis=0)
     r_prime = r - r_com
@@ -29,7 +29,7 @@ def calc_inclination(r: np.ndarray, v: np.ndarray, m: np.ndarray) -> float:
     return inclination
 
 
-def summarize_inclination(snapshot: Snapshot) -> dict[str, object]:
+def _summarize_inclination(snapshot: Snapshot) -> dict[str, object]:
     star_df = snapshot.stars.copy()
     within_r_tidal_star_df = star_df[star_df["is_within_r_tidal"]].copy()
     # remove bulk velocity calculated from stars within r_tidal
@@ -68,7 +68,7 @@ def summarize_inclination(snapshot: Snapshot) -> dict[str, object]:
         v = kinematic_array[indices, 3:6]  # velocities
         m = kinematic_array[indices, 6]  # masses
 
-        inclination = calc_inclination(r, v, m)
+        inclination = _calc_inclination(r, v, m)
         raw_inclinations.append(inclination)
 
         bin_sys_names.append(tuple(bin_sys_ids))
@@ -169,7 +169,7 @@ def process(
             [
                 {
                     "time": time,
-                    **summarize_inclination(snapshot),
+                    **_summarize_inclination(snapshot),
                 }
                 for time, snapshot in series
             ]

@@ -1,5 +1,3 @@
-from typing import Dict, List, Tuple, Union
-
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
@@ -17,7 +15,7 @@ from nbody6.data.series import SnapshotSeries
 from nbody6.data.snapshot import PseudoObservedSnapshot, Snapshot
 
 Time = float
-CacheKey = Tuple[Coordinate3D, Time]
+CacheKey = tuple[Coordinate3D, Time]
 
 
 class PseudoObserver:
@@ -26,7 +24,7 @@ class PseudoObserver:
     def __init__(self, snapshot_series: SnapshotSeries) -> None:
         self._snapshot_series: SnapshotSeries = snapshot_series
 
-        self._cache_obs_snapshot_dict: Dict[CacheKey, PseudoObservedSnapshot] = {}
+        self._cache_obs_snapshot_dict: dict[CacheKey, PseudoObservedSnapshot] = {}
         self._cache_series_collection: SnapshotSeriesCollection
 
     def __repr__(self) -> str:
@@ -42,10 +40,10 @@ class PseudoObserver:
 
     @staticmethod
     def _merge_unresolved_binaries(
-        star1_attr_dict: Dict[str, float],
-        star2_attr_dict: Dict[str, float],
-        header_dict: Dict[str, Union[int, float, str, Tuple[float, float, float]]],
-    ) -> Dict[str, float]:
+        star1_attr_dict: dict[str, float],
+        star2_attr_dict: dict[str, float],
+        header_dict: dict[str, int | float | str | tuple[float, float, float]],
+    ) -> dict[str, float]:
         pos_pc = calc_photocentric(
             L_L_sol1=np.power(10, star1_attr_dict["log_L_L_sol"]),
             L_L_sol2=np.power(10, star2_attr_dict["log_L_L_sol"]),
@@ -90,8 +88,8 @@ class PseudoObserver:
     def _merge_unresolved_systems(
         self,
         unresolved_bin_sys_df: pd.DataFrame,
-        name_attr_map: Dict[Union[int, str], Dict[str, float]],
-        header_dict: Dict[str, Union[int, float, str, Tuple[float, float, float]]],
+        name_attr_map: dict[int | str, dict[str, float]],
+        header_dict: dict[str, int | float | str | tuple[float, float, float]],
         pseudo_obs_coord: Coordinate3D,
     ) -> pd.DataFrame:
         if unresolved_bin_sys_df.empty:
@@ -110,9 +108,9 @@ class PseudoObserver:
             )
         ]
 
-        component_cache: Dict[Tuple[int, ...], Dict[str, float]] = {}
+        component_cache: dict[tuple[int, ...], dict[str, float]] = {}
 
-        def _fetch_attrs(obj_ids: List[int]) -> Dict[str, float]:
+        def _fetch_attrs(obj_ids: list[int]) -> dict[str, float]:
             key = tuple(sorted(obj_ids))
             if len(key) == 1:
                 return dict(name_attr_map[key[0]])
@@ -194,7 +192,7 @@ class PseudoObserver:
         )
 
         # build name -> attr dict map for fast lookup
-        name_attr_map: Dict[Union[int, str], Dict[str, float]] = stars_df.set_index(
+        name_attr_map: dict[int | str, dict[str, float]] = stars_df.set_index(
             "name"
         ).to_dict(orient="index")
 
@@ -272,7 +270,7 @@ class PseudoObserver:
 
     def observe(
         self,
-        coordinates: Union[Coordinate3D, List[Coordinate3D]],
+        coordinates: Coordinate3D | list[Coordinate3D],
         is_verbose: bool = True,
     ) -> SnapshotSeriesCollection:
         if (
@@ -280,11 +278,11 @@ class PseudoObserver:
             and len(coordinates) > 0
             and all(isinstance(c, (list, tuple)) for c in coordinates)
         ):
-            coord_list: List[Coordinate3D] = [tuple(c) for c in coordinates]
+            coord_list: list[Coordinate3D] = [tuple(c) for c in coordinates]
         else:
             coord_list = [tuple(coordinates)]
 
-        obs_series_dict: Dict[Coordinate3D, SnapshotSeries] = {}
+        obs_series_dict: dict[Coordinate3D, SnapshotSeries] = {}
 
         for coord in (
             coord_pbar := tqdm(
@@ -295,7 +293,7 @@ class PseudoObserver:
             )
         ):
             coord_pbar.set_description(f"Pseudo-observing at {coord}")
-            obs_snapshot_dict: Dict[Time, PseudoObservedSnapshot] = {}
+            obs_snapshot_dict: dict[Time, PseudoObservedSnapshot] = {}
 
             for ts, snapshot in (
                 ts_pbar := tqdm(

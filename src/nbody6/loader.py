@@ -1,7 +1,6 @@
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Union
 
 import pandas as pd
 from tqdm.auto import tqdm
@@ -22,9 +21,9 @@ from nbody6.parser import (
 class NBody6Data:
     root: Path
     # file parsers
-    parser_dict: Dict[str, FileParserBase]
+    parser_dict: dict[str, FileParserBase]
     # timestamp info
-    timestamps: List[float]
+    timestamps: list[float]
     raw_timestamp_df: pd.DataFrame
 
     def __repr__(self):
@@ -45,20 +44,20 @@ class NBody6Data:
         )
 
     @property
-    def timestamp_stats(self) -> Dict[str, Dict[str, Optional[float]]]:
+    def timestamp_stats(self) -> dict[str, dict[str, float | None]]:
         return summarize_timestamp_stats(self.timestamps)
 
-    def __getitem__(self, timestamp: float) -> Dict[str, FileParserBase]:
+    def __getitem__(self, timestamp: float) -> dict[str, FileParserBase]:
         return {name: parser[timestamp] for name, parser in self.parser_dict.items()}
 
 
 class NBody6DataLoader:
-    def __init__(self, root: Union[str, Path]) -> None:
+    def __init__(self, root: str | Path) -> None:
         self._root = Path(root)
         if not self._root.is_dir():
             raise NotADirectoryError(f"Root path '{self._root}' is not a directory.")
 
-        self._parser_dict: Dict[str, FileParserBase] = {
+        self._parser_dict: dict[str, FileParserBase] = {
             "fort.19": Fort19Parser(self._root / "fort.19"),
             "fort.82": Fort82Parser(self._root / "fort.82"),
             "fort.83": Fort83Parser(self._root / "fort.83"),
@@ -68,7 +67,7 @@ class NBody6DataLoader:
         }
         self._validate_file()
 
-        self._simulation_data: Optional[NBody6Data] = None
+        self._simulation_data: NBody6Data | None = None
 
     def __repr__(self):
         return f"{type(self).__name__}(root={self._root})"
@@ -81,11 +80,11 @@ class NBody6DataLoader:
                 )
 
     @property
-    def parser_dict(self) -> Dict[str, FileParserBase]:
+    def parser_dict(self) -> dict[str, FileParserBase]:
         return self._parser_dict
 
     @property
-    def simulation_data(self) -> Optional[NBody6Data]:
+    def simulation_data(self) -> NBody6Data | None:
         if self._simulation_data is None:
             warnings.warn(
                 f"[{self._root.name}] Simulation not loaded. Call 'load()' to parse data.",
