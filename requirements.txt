@@ -1,12 +1,9 @@
-numpy~=2.3.2
-astropy~=7.1.0
-pandas~=2.3.1
-joblib~=1.5.1
-tqdm~=4.67.1
-python-dotenv~=1.1.1
-matplotlib~=3.10.5
-pyarrow~=22.0.0
-pot~=0.9.6.post1
-scikit-learn~=1.8.0
-# for notebook support
-jupyter~=1.1.1
+astropy==7.1.0
+joblib==1.5.1
+numpy==2.4.0
+pandas==2.3.3
+python-dotenv==1.2.1
+tqdm==4.67.1
+jupyter==1.1.1
+matplotlib==3.10.5
+pyarrow==22.0.0

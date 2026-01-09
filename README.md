@@ -1,15 +1,12 @@
-# N-Body6 Data Analysis
+# NBODY6 Data Analysis
 
-## Data Processing Pipeline Overview
-
-The pipeline that transforms raw N-Body6 outputs into analysis-ready "observed" data by parsing files,
-assembling them into time-series snapshots, and simulating observational constraints.
+This project provides a pipeline that transforms raw NBODY6 outputs into analysis-ready "pseudo-observed" data by parsing files, assembling time-series snapshots, and simulating observational constraints.
 
 The core workflow follows the diagram below:
 
 ```mermaid
 graph TD
-    A[Raw N-Body6 Files] --> B(NBody6DataLoader /<br/>SnapshotAssembler <br/> -- Collect Raw Data --);
+    A[Raw NBODY6 Files] --> B(NBODY6DataLoader /<br/>SnapshotAssembler <br/> -- Collect Raw Data --);
     B --> C[Snapshot /<br/>SnapshotSeries];
     C --> D(PseudoObserver <br/> -- Simulate Observation --);
     D --> E[PseudoObservedSnapshot /<br/>SnapshotSeriesCollection];
@@ -20,87 +17,151 @@ graph TD
     style E fill: #27ae60, stroke: #333, stroke-width: 2px, color: #fff
 ```
 
-### N-Body6 Files
+## Requirements
 
-The following table lists the essential files produced by N-Body6 and processed by this project.
-Each file contains data at multiple timestamps `time` in Myr:
+Python 3.12+ with the following packages (see `requirements.txt` for pinned versions):
+- `astropy`
+- `pandas`
+- `numpy`
+- `matplotlib`
+- `pyarrow`
+- `joblib`
+- `python-dotenv`
+- `tqdm`
+- `jupyter`
 
-|     File Name      | Description                                                                                                                                                                            | _Essential_ Columns                                                                                                                                                                                            | _Essential_ Header                                                                    |
-| :----------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-|     **OUT34**      | Position and velocity of ALL single stars, unregularized binaries and the centers of mass of regularized binaries (`cmName`).                                                          | `name`, `x`, `y`, `z` $[\mathrm{pc}]$, `vx`, `vy`, `vz` $[\mathrm{km\,s}^{-1}]$                                                                                                                                | `time`, galactic position (`rg` $\cdot$ `rbar`), bulk velocity (`vg` $\cdot$ `vstar`) |
-|      **OUT9**      | Pairing information and orbital attributes of **regularized binaries**. Each row links two component stars (`name1`, `name2`) to their common center of mass (`cmName`).               | `cmName`, `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                             | `time`                                                                                |
-|    **fort.82**     | Stellar properties for both components of **regularized binaries**.                                                                                                                    | `name1`, `name2`, `mass1`, `mass2` $[\mathrm{M}_{\odot}]$, `rad1`, `rad2` $[\log_{10}(\mathrm{R}_{\odot})]$, `zlum1`, `zlum2` $[\log_{10}(\mathrm{L}_{\odot})]$, `tempe1` `tempe2` $[\log_{10}({\mathrm{K}})]$ | `time`                                                                                |
-|    **fort.83**     | Stellar properties for **single stars** and **unregularized binaries**.                                                                                                                | `name`, `mass` $[\mathrm{M}_{\odot}]$, `rad` $[\log_{10}(\mathrm{R}_{\odot})]$, `zlum` $[\log_{10}(\mathrm{L}_{\odot})]$, `tempe` $[\log_{10}({\mathrm{K}})]$                                                  | `time`                                                                                |
-|    **fort.19**     | Pairing information for **unregularized binaries**. Binary components (`name1` / `name2`) may reference regularized binary centers (`cmName`).                                         | `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                                       | `time`                                                                                |
-| **densCentre.txt** | Recalculated cluster density center and tidal radius from density profile analysis. Used as the primary reference for all distance calculations. NOT a vanilla output of N-Body6 code. | `time`, `r_tidal` $[\mathrm{pc}]$, `density_center_x`, `density_center_y`, `density_center_z` $[\mathrm{pc}]$                                                                                                  | — (data serves as header)                                                             |
+## Usage
 
-These files are parsed by specialized `FileParser` classes, coordinated by the `NBody6DataLoader`.  
-The parsed data is then assembled by the `SnapshotAssembler` into `Snapshot` objects.
+### Configure Environment
 
-The assembly process involves:
+Create a `.env` file from the `.env.template` template and set the variables accordingly:
 
-- **Position/Velocity Merging**:
-  <u>OUT34</u> and <u>OUT9</u> data are combined to
-  expand regularized binary centers of mass into individual component positions
+```sh
+cp .env.template .env
+# Edit `.env` and set `SIM_ROOT_BASE` and `OUTPUT_BASE`
+```
 
-- **Attribute Integration**:
-  Stellar properties from <u>fort.82</u> and <u>fort.83</u> are merged with positional data
+### Collect NBODY6 Simulation Runs
 
-- **Distance Calculations**:
-  All distance-based metrics are computed relative to the density center from <u>densCentre.txt</u>
+- Parse and assemble raw NBODY6 outputs (build `SnapshotSeries`, cache results with `joblib`, and export overall/annular statistics):
 
-- **Binary Pairing**:
-  Binary pairings from both <u>OUT9</u> (regularized) and <u>fort.19</u> (unregularized)
-  are integrated into one unified catalog
+  ```sh
+  python ./src/collect_simulation_stats.py
+  ```
 
-### Collect Raw Data
+- Compute inclination statistics (produces per-snapshot inclination summaries):
 
-The collected N-Body6 data is structured into `Snapshot` and `SnapshotSeries` classes
+  ```sh
+  python ./src/collect_inclination_stats.py
+  ```
 
-Each `Snapshot` represents the cluster state at a single timestamp `time`
-and contains two primary `pandas.DataFrame` objects and a dictionary of header metadata:
+These scripts read from `SIM_ROOT_BASE` and write results under `OUTPUT_BASE` (see `.env`). Use the log files in `OUTPUT_BASE/log/` for progress and debugging. Both scripts use `joblib` for parallel processing; adjust the number of cores in the scripts if needed.
 
-|     Component      | Description                                                                              | _Essential_ Columns                                                                                                 |
-| :----------------: | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-|     **stars**      | Position, velocity and stellar attributes for all stars (singles and binary components). | `name`, `x`, `y`, `z`, `vx`, `vy`, `vz`, `mass`, `log_R_R_sol` (`rad`), `log_L_L_sol` (`zlum`), `log_T_K` (`tempe`) |
-| **binary_systems** | Pairing and orbital attributes for all binaries (regularized and unregularized).         | `pair`, `obj1_ids`, `obj2_ids`, `ecc`, `log_period_days` (`p`), `semi` $[\mathrm{AU}]$                              |
-|     **header**     | Snapshot metadata including cluster properties and summary statistics.                   | `time`, `r_tidal`, `r_half_mass`, `total_mass`, etc.                                                                |
+### Outputs
+
+The pipeline creates the following subdirectories (all under `OUTPUT_BASE`) to store processed data and statistics:
+
+- `cache/raw/`: per-simulation cached raw `SnapshotSeries` files (joblib), named `<sim-label>-raw.joblib`.
+- `cache/obs/`: per-simulation cached pseudo-observed `SnapshotSeriesCollection` files (joblib), named `<sim-label>-obs.joblib`.
+- `overall_stats/`: per-simulation overall statistics CSVs, named `<sim-label>-overall_stats.csv`.
+- `annular_stats/`: per-simulation annular statistics CSVs, named `<sim-label>-annular_stats.csv`.
+- `inclination_stats/`: per-simulation inclination summaries, named `<sim-label>-inclination_stats.csv`.
+- `log/`: script log files (e.g., `batch.log`, per-run logs) used for progress and debugging.
+- `figures/`: (optional) output figures and plots produced by analysis notebooks or scripts.
+
+Inspect these directories when debugging or reusing cached results; cached joblib files allow skipping expensive parsing/assembly steps.
+
+### Notebooks for Analysis
+
+The [notebooks/](./notebooks/) directory contains Jupyter notebooks for analysis and dataset preparation, including a dataset split notebook (`dataset_split.ipynb`) and several notebooks for annular and overall statistics.
+
+## Data Processing Pipeline Overview
+
+The data processing pipeline consists of two main stages:
+
+- **Collect Raw Data.** Parsing and assembling raw NBODY6 output files into structured `Snapshot` objects representing the cluster state at each timestamp.
+- **Simulate Observations.** Transforming `Snapshot` objects into `PseudoObservedSnapshot` objects by applying observational constraints such as magnitude limits and resolution limits.
+
+### Data Model
+
+The collected NBODY6 data are structured into `Snapshot` and `SnapshotSeries` classes.
+
+Each `Snapshot` represents the cluster state at a single timestamp `time`, and contains two primary `pandas.DataFrame` objects and a dictionary of header metadata:
+
+|     Component      | Description                                                                               | _Essential_ Columns                                                                                                 |
+| :----------------: | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+|     **stars**      | Position, velocity, and stellar attributes for all stars (singles and binary components). | `name`, `x`, `y`, `z`, `vx`, `vy`, `vz`, `mass`, `log_R_R_sol` (`rad`), `log_L_L_sol` (`zlum`), `log_T_K` (`tempe`) |
+| **binary_systems** | Pairing and orbital attributes for all binaries (regularized and unregularized).          | `pair`, `obj1_ids`, `obj2_ids`, `ecc`, `log_period_days` (`p`), `semi` $[\mathrm{AU}]$                              |
+|     **header**     | Snapshot metadata including cluster properties and summary statistics.                    | `time`, `r_tidal`, `r_half_mass`, `total_mass`, etc.                                                                |
 
 **Key Metrics** include:
 
-|            Metric            | Formula or Definition                                                                                   |
-| :--------------------------: | ------------------------------------------------------------------------------------------------------- |
-|       **`dist_dc_pc`**       | Distance to density center $d_{\text{dc,pc}} = \sqrt{(x - x_{dc})^2 + (y - y_{dc})^2 + (z - z_{dc})^2}$ |
-|      **`r_half_mass`**       | Half-mass radius enclosing 50% of total mass **within $2r_{\text{tidal}}$**                             |
-|    **`dist_dc_r_tidal`**     | Normalized distance: `dist_dc_pc / r_tidal`                                                             |
-|  **`dist_dc_r_half_mass`**   | Normalized distance: `dist_dc_pc / r_half_mass`                                                         |
-| **`is_within_(2x_)r_tidal`** | Boolean: `dist_dc_pc` $\leqslant$ ($2\times$) `r_tidal`                                                 |
+|           Metric           | Formula or Definition                                                                                   |
+| :------------------------: | ------------------------------------------------------------------------------------------------------- |
+|      **`dist_dc_pc`**      | Distance to density center $d_{\text{dc,pc}} = \sqrt{(x - x_{dc})^2 + (y - y_{dc})^2 + (z - z_{dc})^2}$ |
+|     **`r_half_mass`**      | Half-mass radius enclosing 50% of total mass **within $2r_{\text{tidal}}$**                             |
+|   **`dist_dc_r_tidal`**    | Normalized distance: `dist_dc_pc / r_tidal`                                                             |
+| **`dist_dc_r_half_mass`**  | Normalized distance: `dist_dc_pc / r_half_mass`                                                         |
+|  **`is_within_r_tidal`**   | Boolean: `dist_dc_pc` $\leqslant$ `r_tidal`                                                             |
+| **`is_within_2x_r_tidal`** | Boolean: `dist_dc_pc` $\leqslant$ ($2\times$) `r_tidal`                                                 |
+
+Two related “within tidal radius” flags are provided: `is_within_r_tidal` (within `r_tidal`) and `is_within_2x_r_tidal` (within $2r_{\text{tidal}}$).
 
 *_All radial quantities are measured relative to the density center from <u>densCentre.txt</u>._
 
 Binary systems are classified as follows:
 
-|             Type             | Criteria                                                                                  |
-| :--------------------------: | ----------------------------------------------------------------------------------------- |
-|     **`is_wide_binary`**     | $a>1\,000\,\mathrm{AU}$                                                                   |
-|     **`is_hard_binary`**     | $a<{r_\mathrm{hm}}/{N_\mathrm{star}}$ (Heggie’s criterion)                                |
-|    **`is_multi_system`**     | System involves more than 2 individual stars (len(`obj1_ids`) > 1 OR len(`obj2_ids`) > 1) |
-| **`is_within_(2x_)r_tidal`** | Boolean: **ALL** component stars satisfy `is_within_(2x_)r_tidal`.                        |
+|            Type            | Criteria                                                                                  |
+| :------------------------: | ----------------------------------------------------------------------------------------- |
+|    **`is_wide_binary`**    | $a>1\,000\,\mathrm{AU}$                                                                   |
+|    **`is_hard_binary`**    | $a<{r_\mathrm{hm}}/{N_\mathrm{star}}$ (Heggie’s criterion)                                |
+|   **`is_multi_system`**    | System involves more than 2 individual stars (len(`obj1_ids`) > 1 OR len(`obj2_ids`) > 1) |
+|  **`is_within_r_tidal`**   | Boolean: **ALL** component stars satisfy `is_within_r_tidal`.                             |
+| **`is_within_2x_r_tidal`** | Boolean: **ALL** component stars satisfy `is_within_2x_r_tidal`.                          |
 
 A `SnapshotSeries` is a temporal sequence of `Snapshot` objects that stores the complete simulation.
 
+
+### Input NBODY6 Files
+
+The following table lists the essential files produced by NBODY6 and processed by this project.
+Each file contains data at multiple timestamps, `time` (in Myr):
+
+|     File Name      | Description                                                                                                                                                                                    | Key Columns                                                                                                                                                                                                    | Essential Header                                                                      |
+| :----------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+|     **OUT34**      | Position and velocity of ALL single stars, unregularized binaries, and the centers of mass of regularized binaries (`cmName`).                                                                  | `name`, `x`, `y`, `z` $[\mathrm{pc}]$, `vx`, `vy`, `vz` $[\mathrm{km\,s}^{-1}]$                                                                                                                                | `time`, galactic position (`rg` $\cdot$ `rbar`), bulk velocity (`vg` $\cdot$ `vstar`) |
+|      **OUT9**      | Pairing information and orbital attributes of **regularized binaries**. Each row links two component stars (`name1`, `name2`) to their common center of mass (`cmName`).                       | `cmName`, `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                             | `time`                                                                                |
+|    **fort.82**     | Stellar properties for both components of **regularized binaries**.                                                                                                                            | `name1`, `name2`, `mass1`, `mass2` $[\mathrm{M}_{\odot}]$, `rad1`, `rad2` $[\log_{10}(\mathrm{R}_{\odot})]$, `zlum1`, `zlum2` $[\log_{10}(\mathrm{L}_{\odot})]$, `tempe1` `tempe2` $[\log_{10}({\mathrm{K}})]$ | `time`                                                                                |
+|    **fort.83**     | Stellar properties for **single stars** and **unregularized binaries**.                                                                                                                        | `name`, `mass` $[\mathrm{M}_{\odot}]$, `rad` $[\log_{10}(\mathrm{R}_{\odot})]$, `zlum` $[\log_{10}(\mathrm{L}_{\odot})]$, `tempe` $[\log_{10}({\mathrm{K}})]$                                                  | `time`                                                                                |
+|    **fort.19**     | Pairing information for **unregularized binaries**. Binary components (`name1` / `name2`) may reference regularized binary centers (`cmName`).                                                 | `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                                       | `time`                                                                                |
+| **densCentre.txt** | Recalculated cluster density center and tidal radius from density profile analysis. Used as the primary reference for all distance calculations. This is NOT a standard output of NBODY6 code. | `time`, `r_tidal` $[\mathrm{pc}]$, `density_center_x`, `density_center_y`, `density_center_z` $[\mathrm{pc}]$                                                                                                  | — (data serves as header)                                                             |
+
+These files are parsed by specialized `FileParser` classes, coordinated by `NBODY6DataLoader`.  
+The parsed data is then assembled by the `SnapshotAssembler` into `Snapshot` objects.
+
+The assembly process involves:
+
+- **Position/Velocity Merging**:
+  <u>OUT34</u> and <u>OUT9</u> data are combined to expand regularized binary centers of mass into individual component positions.
+
+- **Attribute Integration**:
+  Stellar properties from <u>fort.82</u> and <u>fort.83</u> are merged with the positional data.
+
+- **Distance Calculations**:
+  All distance-based metrics are computed relative to the density center from <u>densCentre.txt</u>.
+
+- **Binary Pairing**:
+  Binary pairings from both <u>OUT9</u> (regularized) and <u>fort.19</u> (unregularized) are integrated into a unified catalog.
+
 ### Simulate Observations
 
-To mimic observational constraints
-(e.g., magnitude limits, resolution limits),
-the `Snapshot` object can be transformed into a `PseudoObservedSnapshot` object by `PseudoObserver`.
+To mimic observational constraints (e.g., magnitude limits and resolution limits), a `Snapshot` can be transformed into a `PseudoObservedSnapshot` by `PseudoObserver`.
 
 This process includes:
 
 #### Preparation
 
-Filtering `stars` and `binary_systems` based on `is_within_2x_r_tidal` flag
-and update stellar `is_binary` flags accordingly.
+Filter `stars` and `binary_systems` based on the `is_within_2x_r_tidal` flag, and update stellar `is_binary` flags accordingly.
 
 #### Hierarchical Unresolved Binary System Merging
 
@@ -137,26 +198,24 @@ For hierarchical systems, these formulas are applied recursively at each merging
 
 ## Statistics and Visualization
 
-After generating pseudo-observed snapshots, statistical analyses and visualizations are performed
-to compare some cluster characteristic statistics across different initial conditions.
+After generating pseudo-observed snapshots, statistical analyses and visualizations are performed to compare cluster-level statistics across different initial conditions.
 
-N-Body6 simulations output snapshots at adaptive timestamps that vary between runs. For example:
+NBODY6 simulations output snapshots at adaptive timestamps that vary between runs. For example:
 
 - **Run A** may produce snapshots at: 0, 1.0, 2.0, 3.0, ... Myr
 - **Run B** may produce snapshots at: 0, 0.8, 1.6, 2.4, ... Myr
 
-To compare between runs, the time series of metrics (e.g., `r_tidal`, `binary_fraction`)
-are temporally aligned to a uniform 1 Myr grid within its range to avoid over-interpolation artifacts.
+To compare between runs, metric time series (e.g., `r_tidal`, `binary_fraction`) are aligned onto a uniform 1 Myr grid (within the covered time range) to avoid over-interpolation artifacts.
 Once aligned, metrics from different `init_pos` runs are aggregated and visualized.
 
 ## :construction: Future Work
 
-Extend `PseudoObserver` with a more sophisticated observation simulation step:
+Extend `PseudoObserver` with a synthetic photometry step so pseudo-observed snapshots can be filtered and compared in a survey-like way (for example, Gaia-like selections). Conceptually, this involves:
 
-1. assigns an spectral energy distribution (SED) to each star;
-2. projects the SED onto target passbands (e.g., Gaia G/BP/RP) to obtain absolute magnitudes/colors;
-3. applies distance modulus + extinction to get apparent magnitudes; and
-4. applies a magnitude limit / completeness model (optionally adding photometric noise and simple blending approximations).
+1. Assign a spectral energy distribution (SED) that describes flux as a function of wavelength for each star, based on its stellar parameters (e.g., effective temperature, luminosity, metallicity);
+2. Integrate the SED through instrument passbands (e.g., Gaia G/BP/RP) to obtain absolute magnitudes and colors;
+3. Convert to apparent photometry by applying distance modulus and extinction;
+4. Apply a selection model (magnitude limits and completeness), optionally adding simple photometric noise and basic blending heuristics.
 
-Available tools include [`synphot`](https://synphot.readthedocs.io/) for bandpasses/extinction and photometry calculations, plus [`speclite`](https://speclite.readthedocs.io/) and [`sedpy`](https://sedpy.readthedocs.io/) for filter/transmission curve utilities and lightweight SED -> magnitude projections.
+Practical tools to support the under-implemented pieces include [`synphot`](https://synphot.readthedocs.io/) for synthetic photometry and bandpass-based flux integration, plus [`speclite`](https://speclite.readthedocs.io/) and [`sedpy`](https://sedpy.readthedocs.io/) for filter and transmission-curve utilities.
 

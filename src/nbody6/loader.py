@@ -51,7 +51,7 @@ class NBody6Data:
         return {name: parser[timestamp] for name, parser in self.parser_dict.items()}
 
 
-class NBody6DataLoader:
+class NBODY6DataLoader:
     def __init__(self, root: str | Path) -> None:
         self._root = Path(root)
         if not self._root.is_dir():

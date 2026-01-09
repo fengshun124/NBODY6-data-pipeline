@@ -8,7 +8,7 @@ import pandas as pd
 from joblib import Parallel, delayed
 from nbody6.assembler import SnapshotAssembler
 from nbody6.data import Snapshot, SnapshotSeries
-from nbody6.loader import NBody6DataLoader
+from nbody6.loader import NBODY6DataLoader
 from utils import (
     OUTPUT_BASE,
     SIM_ROOT_BASE,
@@ -151,7 +151,7 @@ def process(
             series = SnapshotSeries.from_joblib(cached_snapshot_series_joblib)
             logging.info(f"[{sim_exp_label}] Loaded {series}.")
         else:
-            loader = NBody6DataLoader(root=sim_path)
+            loader = NBODY6DataLoader(root=sim_path)
             logging.debug(f"[{sim_exp_label}] Loading {loader}")
             loader.load(is_strict=True, is_allow_timestamp_trim=True)
 

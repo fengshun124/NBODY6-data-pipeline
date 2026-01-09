@@ -7,7 +7,7 @@ from joblib import Parallel, delayed
 
 from nbody6.assembler import SnapshotAssembler
 from nbody6.data import SnapshotSeries, SnapshotSeriesCollection
-from nbody6.loader import NBody6DataLoader
+from nbody6.loader import NBODY6DataLoader
 from nbody6.observer import PseudoObserver
 from utils import (
     OUTPUT_BASE,
@@ -63,7 +63,7 @@ def process(
                 logging.debug(f"[{sim_exp_label}] Loading series")
             else:
                 # start from beginning -> load raw data, assemble series & export
-                loader = NBody6DataLoader(root=sim_path)
+                loader = NBODY6DataLoader(root=sim_path)
                 logging.debug(f"[{sim_exp_label}] Loading {loader}")
                 loader.load(is_strict=True, is_allow_timestamp_trim=True)
 
