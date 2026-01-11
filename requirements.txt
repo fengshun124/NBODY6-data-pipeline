@@ -1,9 +1,10 @@
-astropy==7.1.0
+astropy==7.0.0
 joblib==1.5.1
-numpy==2.4.0
+numpy==2.2.5
 pandas==2.3.3
+pot==0.9.6.post1
 python-dotenv==1.2.1
 tqdm==4.67.1
 jupyter==1.1.1
-matplotlib==3.10.5
-pyarrow==22.0.0
+matplotlib==3.10.0
+pyarrow==21.0.0

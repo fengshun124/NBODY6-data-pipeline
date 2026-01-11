@@ -1,7 +1,9 @@
-archive
+archive*
 output*
-data
-cache
+data*
+cache*
+log*
+*bkup*
 
 ### Intellij+all ###
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio, WebStorm and Rider

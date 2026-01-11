@@ -25,6 +25,7 @@ Python 3.12+ with the following packages (see `requirements.txt` for pinned vers
 - `numpy`
 - `matplotlib`
 - `pyarrow`
+- `pot`
 - `joblib`
 - `python-dotenv`
 - `tqdm`
