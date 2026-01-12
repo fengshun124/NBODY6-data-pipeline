@@ -18,7 +18,7 @@ from nbody6.parser import (
 
 
 @dataclass(slots=True)
-class NBody6Data:
+class NBODY6Data:
     root: Path
     # file parsers
     parser_dict: dict[str, FileParserBase]
@@ -67,7 +67,7 @@ class NBODY6DataLoader:
         }
         self._validate_file()
 
-        self._simulation_data: NBody6Data | None = None
+        self._simulation_data: NBODY6Data | None = None
 
     def __repr__(self):
         return f"{type(self).__name__}(root={self._root})"
@@ -84,7 +84,7 @@ class NBODY6DataLoader:
         return self._parser_dict
 
     @property
-    def simulation_data(self) -> NBody6Data | None:
+    def simulation_data(self) -> NBODY6Data | None:
         if self._simulation_data is None:
             warnings.warn(
                 f"[{self._root.name}] Simulation not loaded. Call 'load()' to parse data.",
@@ -98,7 +98,7 @@ class NBODY6DataLoader:
         is_verbose: bool = True,
         is_allow_timestamp_trim: bool = False,
         timestamp_tolerance: float = 2e-2,
-    ) -> NBody6Data:
+    ) -> NBODY6Data:
         if self._simulation_data is not None:
             warnings.warn(
                 f"[{self._root}] Reloading simulation data. Previous data will be overwritten.",
@@ -199,7 +199,7 @@ class NBODY6DataLoader:
                 if src_ts != ref_ts:
                     parser.update_timestamp(float(src_ts), float(ref_ts))
 
-        self._simulation_data = NBody6Data(
+        self._simulation_data = NBODY6Data(
             root=self._root,
             parser_dict=self._parser_dict,
             timestamps=ref_timestamps,

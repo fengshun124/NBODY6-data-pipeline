@@ -19,7 +19,7 @@ graph TD
 
 ## Requirements
 
-Python 3.12+ with the following packages (see `requirements.txt` for pinned versions):
+Python 3.12+ with the following packages (see [`requirements.txt`](./requirements.txt) for pinned versions):
 - `astropy`
 - `pandas`
 - `numpy`
@@ -35,11 +35,15 @@ Python 3.12+ with the following packages (see `requirements.txt` for pinned vers
 
 ### Configure Environment
 
-Create a `.env` file from the `.env.template` template and set the variables accordingly:
+Create a `.env` from the [`.env.template`](.env.template) and set the required variables:
 
-```sh
+- `SIM_ROOT_BASE` (path to raw NBODY6 output)
+- `OUTPUT_BASE` (where pipeline outputs are written)
+- `MPL_STYLE` (optional: matplotlib style for plots)
+
+```bash
+# Edit .env and set the variables listed above
 cp .env.template .env
-# Edit `.env` and set `SIM_ROOT_BASE` and `OUTPUT_BASE`
 ```
 
 ### Collect NBODY6 Simulation Runs
@@ -56,36 +60,46 @@ cp .env.template .env
   python ./src/collect_inclination_stats.py
   ```
 
-These scripts read from `SIM_ROOT_BASE` and write results under `OUTPUT_BASE` (see `.env`). Use the log files in `OUTPUT_BASE/log/` for progress and debugging. Both scripts use `joblib` for parallel processing; adjust the number of cores in the scripts if needed.
+Notes:
+- Both scripts read raw data from `SIM_ROOT_BASE` and write outputs under `OUTPUT_BASE` (see `.env`).
+- Scripts use `joblib` for parallel processing; adjust core counts inside the scripts if needed.
+- Check `OUTPUT_BASE/log/` for progress when debugging.
 
 ### Outputs
 
-The pipeline creates the following subdirectories (all under `OUTPUT_BASE`) to store processed data and statistics:
+The pipeline writes results under `OUTPUT_BASE` using the following structure (examples shown):
 
-- `cache/raw/`: per-simulation cached raw `SnapshotSeries` files (joblib), named `<sim-label>-raw.joblib`.
-- `cache/obs/`: per-simulation cached pseudo-observed `SnapshotSeriesCollection` files (joblib), named `<sim-label>-obs.joblib`.
-- `overall_stats/`: per-simulation overall statistics CSVs, named `<sim-label>-overall_stats.csv`.
-- `annular_stats/`: per-simulation annular statistics CSVs, named `<sim-label>-annular_stats.csv`.
-- `inclination_stats/`: per-simulation inclination summaries, named `<sim-label>-inclination_stats.csv`.
-- `log/`: script log files (e.g., `batch.log`, per-run logs) used for progress and debugging.
-- `figures/`: (optional) output figures and plots produced by analysis notebooks or scripts.
+- `cache/raw/` — cached raw `SnapshotSeries` joblib files named `<sim-label>-raw.joblib`.
+- `cache/obs/` — cached pseudo-observed `SnapshotSeriesCollection` joblib files named `<sim-label>-obs.joblib`.
+- `overall_stats/` — per-simulation overall statistics CSVs: `<sim-label>-overall_stats.csv`.
+- `annular_stats/` — per-simulation annular statistics CSVs: `<sim-label>-annular_stats.csv`.
+- `inclination_stats/` — inclination summaries: `<sim-label>-inclination_stats.csv`.
+- `log/` — script log files such as `batch.log` and per-run logs.
+- `figures/` — optional plots and figures produced by notebooks or scripts.
 
-Inspect these directories when debugging or reusing cached results; cached joblib files allow skipping expensive parsing/assembly steps.
+Use these caches to skip expensive parsing/assembly steps when rebuilding datasets or running analysis.
 
 ### Notebooks for Analysis
 
-The [notebooks/](./notebooks/) directory contains Jupyter notebooks for analysis and dataset preparation, including a dataset split notebook (`dataset_split.ipynb`) and several notebooks for annular and overall statistics.
+- See the [`notebooks/`](./notebooks/) directory for Jupyter notebooks used for dataset preparation and visualization (for example, `dataset_split.ipynb`, `annular_stats.ipynb`, `overall_stat.ipynb`).
+
+### *Quick Checklist*
+
+- Create and edit `.env` from `.env.template` with `SIM_ROOT_BASE` and `OUTPUT_BASE`.
+- Run `python ./src/collect_simulation_stats.py` to parse and cache simulations.
+- Run `python ./src/collect_inclination_stats.py` to compute inclination summaries.
+- Inspect `OUTPUT_BASE/cache/` and `OUTPUT_BASE/*_stats/` for results and logs.
 
 ## Data Processing Pipeline Overview
 
 The data processing pipeline consists of two main stages:
 
-- **Collect Raw Data.** Parsing and assembling raw NBODY6 output files into structured `Snapshot` objects representing the cluster state at each timestamp.
-- **Simulate Observations.** Transforming `Snapshot` objects into `PseudoObservedSnapshot` objects by applying observational constraints such as magnitude limits and resolution limits.
+- **Collect Raw Data.** Parsing and assembling raw NBODY6 output files into structured [`Snapshot`](./src/nbody6/data/snapshot.py) objects representing the cluster state at each timestamp.
+- **Simulate Observations.** Transforming `Snapshot` objects into [`PseudoObservedSnapshot`](./src/nbody6/data/snapshot.py) objects by applying observational constraints such as magnitude limits and resolution limits.
 
 ### Data Model
 
-The collected NBODY6 data are structured into `Snapshot` and `SnapshotSeries` classes.
+The collected NBODY6 data are structured into `Snapshot` and [`SnapshotSeries`](./src/nbody6/data/series.py) classes.
 
 Each `Snapshot` represents the cluster state at a single timestamp `time`, and contains two primary `pandas.DataFrame` objects and a dictionary of header metadata:
 
@@ -120,8 +134,7 @@ Binary systems are classified as follows:
 |  **`is_within_r_tidal`**   | Boolean: **ALL** component stars satisfy `is_within_r_tidal`.                             |
 | **`is_within_2x_r_tidal`** | Boolean: **ALL** component stars satisfy `is_within_2x_r_tidal`.                          |
 
-A `SnapshotSeries` is a temporal sequence of `Snapshot` objects that stores the complete simulation.
-
+A `SnapshotSeries` is a temporal sequence of `Snapshot` objects that stores the complete simulation, while [`SnapshotSeriesCollection`](./src/nbody6/data/collection.py) holds multiple `SnapshotSeries` (for example, the same run pseudo-observed at different position).
 
 ### Input NBODY6 Files
 
@@ -130,15 +143,15 @@ Each file contains data at multiple timestamps, `time` (in Myr):
 
 |     File Name      | Description                                                                                                                                                                                    | Key Columns                                                                                                                                                                                                    | Essential Header                                                                      |
 | :----------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-|     **OUT34**      | Position and velocity of ALL single stars, unregularized binaries, and the centers of mass of regularized binaries (`cmName`).                                                                  | `name`, `x`, `y`, `z` $[\mathrm{pc}]$, `vx`, `vy`, `vz` $[\mathrm{km\,s}^{-1}]$                                                                                                                                | `time`, galactic position (`rg` $\cdot$ `rbar`), bulk velocity (`vg` $\cdot$ `vstar`) |
+|     **OUT34**      | Position and velocity of ALL single stars, unregularized binaries, and the centers of mass of regularized binaries (`cmName`).                                                                 | `name`, `x`, `y`, `z` $[\mathrm{pc}]$, `vx`, `vy`, `vz` $[\mathrm{km\,s}^{-1}]$                                                                                                                                | `time`, galactic position (`rg` $\cdot$ `rbar`), bulk velocity (`vg` $\cdot$ `vstar`) |
 |      **OUT9**      | Pairing information and orbital attributes of **regularized binaries**. Each row links two component stars (`name1`, `name2`) to their common center of mass (`cmName`).                       | `cmName`, `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                             | `time`                                                                                |
 |    **fort.82**     | Stellar properties for both components of **regularized binaries**.                                                                                                                            | `name1`, `name2`, `mass1`, `mass2` $[\mathrm{M}_{\odot}]$, `rad1`, `rad2` $[\log_{10}(\mathrm{R}_{\odot})]$, `zlum1`, `zlum2` $[\log_{10}(\mathrm{L}_{\odot})]$, `tempe1` `tempe2` $[\log_{10}({\mathrm{K}})]$ | `time`                                                                                |
 |    **fort.83**     | Stellar properties for **single stars** and **unregularized binaries**.                                                                                                                        | `name`, `mass` $[\mathrm{M}_{\odot}]$, `rad` $[\log_{10}(\mathrm{R}_{\odot})]$, `zlum` $[\log_{10}(\mathrm{L}_{\odot})]$, `tempe` $[\log_{10}({\mathrm{K}})]$                                                  | `time`                                                                                |
 |    **fort.19**     | Pairing information for **unregularized binaries**. Binary components (`name1` / `name2`) may reference regularized binary centers (`cmName`).                                                 | `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                                       | `time`                                                                                |
 | **densCentre.txt** | Recalculated cluster density center and tidal radius from density profile analysis. Used as the primary reference for all distance calculations. This is NOT a standard output of NBODY6 code. | `time`, `r_tidal` $[\mathrm{pc}]$, `density_center_x`, `density_center_y`, `density_center_z` $[\mathrm{pc}]$                                                                                                  | — (data serves as header)                                                             |
 
-These files are parsed by specialized `FileParser` classes, coordinated by `NBODY6DataLoader`.  
-The parsed data is then assembled by the `SnapshotAssembler` into `Snapshot` objects.
+These files are parsed by specialized [`FileParser`](./src/nbody6/parser/) classes, coordinated by [`NBODY6DataLoader`](./src/nbody6/loader.py).  
+The parsed data is then assembled by the [`SnapshotAssembler`](./src/nbody6/assembler.py) into `Snapshot` objects.
 
 The assembly process involves:
 
@@ -156,7 +169,7 @@ The assembly process involves:
 
 ### Simulate Observations
 
-To mimic observational constraints (e.g., magnitude limits and resolution limits), a `Snapshot` can be transformed into a `PseudoObservedSnapshot` by `PseudoObserver`.
+To mimic observational constraints (e.g., magnitude limits and resolution limits), a `Snapshot` can be transformed into a [`PseudoObservedSnapshot`](./src/nbody6/observer.py) by `PseudoObserver`.
 
 This process includes:
 
@@ -206,7 +219,7 @@ NBODY6 simulations output snapshots at adaptive timestamps that vary between run
 - **Run A** may produce snapshots at: 0, 1.0, 2.0, 3.0, ... Myr
 - **Run B** may produce snapshots at: 0, 0.8, 1.6, 2.4, ... Myr
 
-To compare between runs, metric time series (e.g., `r_tidal`, `binary_fraction`) are aligned onto a uniform 1 Myr grid (within the covered time range) to avoid over-interpolation artifacts.
+To compare between runs, metric time series (e.g., `r_tidal`, `binary_fraction`) are aligned onto a uniform 1 Myr grid (within the covered time range) to avoid over-interpolation artifacts. This alignment is performed during analysis in the notebooks (for example, [`notebooks/annular_stats.ipynb`](./notebooks/annular_stats.ipynb)).
 Once aligned, metrics from different `init_pos` runs are aggregated and visualized.
 
 ## :construction: Future Work

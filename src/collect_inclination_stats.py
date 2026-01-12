@@ -198,11 +198,12 @@ def process(
 
 def process_all(log_file: Path | str | None = None) -> None:
     # setup logger
-    setup_logger(
+    log_file = (
         Path(log_file).resolve()
         if log_file is not None
         else (OUTPUT_BASE / "log" / "batch_collect_inclination.log").resolve()
     )
+    setup_logger(log_file)
 
     simulations = fetch_sim_root(SIM_ROOT_BASE)
     logger.info(f"Fetched {len(simulations)} simulations from {SIM_ROOT_BASE}.")

@@ -9,12 +9,12 @@ from nbody6.calc.binary import calc_semi_major_axis, is_hard_binary, is_wide_bin
 from nbody6.calc.cluster import calc_half_mass_radius
 from nbody6.data.series import SnapshotSeries
 from nbody6.data.snapshot import Snapshot
-from nbody6.loader import NBody6Data
+from nbody6.loader import NBODY6Data
 from nbody6.parser import FileBlock
 
 
 class SnapshotAssembler:
-    def __init__(self, raw_data: NBody6Data) -> None:
+    def __init__(self, raw_data: NBODY6Data) -> None:
         self._raw_data = raw_data
 
         self._cache_assembled_dict: dict[float, Snapshot | None] = {}
