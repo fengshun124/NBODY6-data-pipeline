@@ -140,8 +140,14 @@ class SnapshotSeriesCollection:
         filepath = Path(filepath).resolve()
         if filepath.exists() and not enforce_overwrite:
             raise FileExistsError(f"{filepath} already exists.")
-        with open(filepath, "wb") as f:
-            pickle.dump(self.to_dict(is_materialize=True), f)
+
+        tmp_filepath = filepath.with_suffix(filepath.suffix + ".tmp")
+        try:
+            with open(tmp_filepath, "wb") as f:
+                pickle.dump(self.to_dict(is_materialize=True), f)
+            tmp_filepath.replace(filepath)
+        finally:
+            tmp_filepath.unlink(missing_ok=True)
 
     def to_joblib(
         self,
@@ -151,7 +157,17 @@ class SnapshotSeriesCollection:
         filepath = Path(filepath).resolve()
         if filepath.exists() and not enforce_overwrite:
             raise FileExistsError(f"{filepath} already exists.")
-        joblib.dump(self.to_dict(is_materialize=False), filepath, compress=3)
+
+        tmp_filepath = filepath.with_suffix(filepath.suffix + ".tmp")
+        try:
+            joblib.dump(
+                self.to_dict(is_materialize=True),
+                tmp_filepath,
+                compress=3,
+            )
+            tmp_filepath.replace(filepath)
+        finally:
+            tmp_filepath.unlink(missing_ok=True)
 
     @classmethod
     def from_dict(cls, data: dict) -> "SnapshotSeriesCollection":

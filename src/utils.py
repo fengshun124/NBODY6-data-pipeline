@@ -4,12 +4,15 @@ import re
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+import pandas as pd
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
 OUTPUT_BASE = Path(os.getenv("OUTPUT_BASE")).resolve()
+
+# TODO: setup_logger function
 
 
 def setup_logger(log_file: Path | str) -> None:
@@ -36,7 +39,7 @@ def setup_logger(log_file: Path | str) -> None:
             f"Failed to create log file handler for {log_file}: {e!r}, using stream handler only."
         )
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.INFO,
         format="[%(asctime)s][%(processName)s][%(levelname)s] %(message)s",
         datefmt="%H:%M:%S",
         handlers=handlers,
@@ -71,3 +74,26 @@ def fetch_sim_root(base_path: Path) -> list[tuple[dict[str, int], Path, str]]:
                     )
                 )
     return sorted(simulations, key=lambda x: x[0]["init_mass_lv"])
+
+
+def atomic_export_df_csv(
+    df: pd.DataFrame,
+    target_file: Path,
+) -> None:
+    target_file = Path(target_file).resolve()
+    tmp_file = target_file.with_suffix(target_file.suffix + ".tmp")
+    # remove existing tmp file if any
+    if tmp_file.is_file():
+        tmp_file.unlink()
+
+    # atomic write
+    try:
+        df.to_csv(tmp_file, index=False)
+        tmp_file.replace(target_file)
+    except Exception as e:
+        if tmp_file.is_file():
+            tmp_file.unlink()
+        raise e
+    finally:
+        if tmp_file.is_file():
+            tmp_file.unlink()

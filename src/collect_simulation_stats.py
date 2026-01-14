@@ -11,6 +11,7 @@ from nbody6.observer import PseudoObserver
 from utils import (
     OUTPUT_BASE,
     SIM_ROOT_BASE,
+    atomic_export_df_csv,
     fetch_sim_root,
     setup_logger,
 )
@@ -55,20 +56,20 @@ def process(
             )
             return
 
-        cache_snapshot_series_joblib = raw_dir / f"{sim_exp_label}-raw.joblib"
-        cache_obs_series_collection_joblib = obs_dir / f"{sim_exp_label}-obs.joblib"
+        snapshot_series_joblib = raw_dir / f"{sim_exp_label}-raw.joblib"
+        obs_series_collection_joblib = obs_dir / f"{sim_exp_label}-obs.joblib"
 
         # if series_collection exist -> load & export
-        if cache_obs_series_collection_joblib.is_file():
+        if obs_series_collection_joblib.is_file():
             series_collection = SnapshotSeriesCollection.from_joblib(
-                cache_obs_series_collection_joblib
+                obs_series_collection_joblib
             )
             logger.info(f"[{sim_exp_label}] loaded {series_collection}.")
 
         else:
             # if series exist -> load, compute series_collection & export
-            if cache_snapshot_series_joblib.is_file():
-                series = SnapshotSeries.from_joblib(cache_snapshot_series_joblib)
+            if snapshot_series_joblib.is_file():
+                series = SnapshotSeries.from_joblib(snapshot_series_joblib)
                 logger.debug(f"[{sim_exp_label}] loading series ...")
             else:
                 # start from beginning -> load raw data, assemble series & export
@@ -79,9 +80,9 @@ def process(
                 assembler = SnapshotAssembler(raw_data=loader.simulation_data)
                 series = assembler.assemble_all(is_strict=False)
 
-                series.to_joblib(cache_snapshot_series_joblib)
+                # atomic write
+                series.to_joblib(snapshot_series_joblib)
                 del loader, assembler
-                gc.collect()
 
             logger.info(f"[{sim_exp_label}] loaded {series}.")
 
@@ -95,10 +96,10 @@ def process(
                 is_verbose=True,
             )
 
-            series_collection.to_joblib(cache_obs_series_collection_joblib)
+            # atomic write
+            series_collection.to_joblib(obs_series_collection_joblib)
             logger.info(f"[{sim_exp_label}] computed {series_collection}.")
             del series, observer
-            gc.collect()
 
         # export overall_stats_df & annular_stats_df
         overall_stats_df = series_collection.statistics.copy()
@@ -108,15 +109,24 @@ def process(
             overall_stats_df.insert(0, k, v)
             annular_stats_df.insert(0, k, v)
 
-        overall_stats_df.to_csv(overall_stats_file, index=False)
-        annular_stats_df.to_csv(annular_stats_file, index=False)
+        # atomic write overall_stats & annular_stats
+        atomic_export_df_csv(
+            df=overall_stats_df,
+            target_file=overall_stats_file,
+        )
+
+        atomic_export_df_csv(
+            df=annular_stats_df,
+            target_file=annular_stats_file,
+        )
+
         logger.info(f"[{sim_exp_label}] overall_stats_df & annular_stats_df saved.")
 
         del series_collection, overall_stats_df, annular_stats_df
-        gc.collect()
 
     except Exception as e:
         logger.exception(f"[{sim_exp_label}] failed: {e!r}")
+    finally:
         gc.collect()
 
 

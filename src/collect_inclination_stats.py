@@ -12,6 +12,7 @@ from nbody6.loader import NBODY6DataLoader
 from utils import (
     OUTPUT_BASE,
     SIM_ROOT_BASE,
+    atomic_export_df_csv,
     fetch_sim_root,
     setup_logger,
 )
@@ -150,15 +151,15 @@ def process(
             inclination_stats_dir / f"{sim_exp_label}-inclination_stats.csv"
         )
 
-        cached_snapshot_series_joblib = raw_dir / f"{sim_exp_label}-raw.joblib"
+        snapshot_series_joblib = raw_dir / f"{sim_exp_label}-raw.joblib"
 
         # if final inclination_stats exist -> skip
         if inclination_stats_file.is_file():
             logger.info(f"[{sim_exp_label}] inclination_stats_df exist. Skip.")
             return
 
-        if cached_snapshot_series_joblib.is_file():
-            series = SnapshotSeries.from_joblib(cached_snapshot_series_joblib)
+        if snapshot_series_joblib.is_file():
+            series = SnapshotSeries.from_joblib(snapshot_series_joblib)
             logger.debug(f"[{sim_exp_label}] loaded {series}.")
         else:
             loader = NBODY6DataLoader(root=sim_path)
@@ -168,7 +169,7 @@ def process(
             assembler = SnapshotAssembler(raw_data=loader.simulation_data)
             series = assembler.assemble_all(is_strict=False)
 
-            series.to_joblib(cached_snapshot_series_joblib)
+            series.to_joblib(snapshot_series_joblib)
 
             del loader, assembler
             gc.collect()
@@ -188,7 +189,10 @@ def process(
         for k, v in sim_attr_dict.items():
             inclination_stats_df.insert(0, k, v)
 
-        inclination_stats_df.to_csv(inclination_stats_file, index=False)
+        atomic_export_df_csv(
+            df=inclination_stats_df,
+            target_file=inclination_stats_file,
+        )
         logger.info(f"[{sim_exp_label}] inclination_stats_df saved.")
 
     except Exception as e:
