@@ -20,6 +20,7 @@ graph TD
 ## Requirements
 
 Python 3.12+ with the following packages (see [`requirements.txt`](./requirements.txt) for pinned versions):
+
 - `astropy`
 - `pandas`
 - `numpy`
@@ -61,6 +62,7 @@ cp .env.template .env
   ```
 
 Notes:
+
 - Both scripts read raw data from `SIM_ROOT_BASE` and write outputs under `OUTPUT_BASE` (see `.env`).
 - Scripts use `joblib` for parallel processing; adjust core counts inside the scripts if needed.
 - Check `OUTPUT_BASE/log/` for progress when debugging.
