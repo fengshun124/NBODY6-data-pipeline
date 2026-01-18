@@ -82,18 +82,11 @@ def atomic_export_df_csv(
 ) -> None:
     target_file = Path(target_file).resolve()
     tmp_file = target_file.with_suffix(target_file.suffix + ".tmp")
-    # remove existing tmp file if any
-    if tmp_file.is_file():
-        tmp_file.unlink()
-
+    
     # atomic write
     try:
         df.to_csv(tmp_file, index=False)
         tmp_file.replace(target_file)
-    except Exception as e:
-        if tmp_file.is_file():
-            tmp_file.unlink()
-        raise e
     finally:
-        if tmp_file.is_file():
-            tmp_file.unlink()
+        del df
+        tmp_file.unlink(missing_ok=True)

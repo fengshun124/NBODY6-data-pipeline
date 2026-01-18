@@ -37,8 +37,8 @@ def process(
     # prepare directories
     raw_dir = OUTPUT_BASE / "cache" / "raw"
     obs_dir = OUTPUT_BASE / "cache" / "obs"
-    overall_stats_dir = OUTPUT_BASE / "overall_stats"
-    annular_stats_dir = OUTPUT_BASE / "annular_stats"
+    overall_stats_dir = OUTPUT_BASE / "stats" / "overall_stats"
+    annular_stats_dir = OUTPUT_BASE / "stats" / "annular_stats"
     for p in [raw_dir, obs_dir, overall_stats_dir, annular_stats_dir]:
         p.mkdir(parents=True, exist_ok=True)
 
@@ -48,6 +48,8 @@ def process(
     try:
         overall_stats_file = overall_stats_dir / f"{sim_exp_label}-overall_stats.csv"
         annular_stats_file = annular_stats_dir / f"{sim_exp_label}-annular_stats.csv"
+        snapshot_series_joblib = raw_dir / f"{sim_exp_label}-raw.joblib"
+        obs_series_collection_joblib = obs_dir / f"{sim_exp_label}-obs.joblib"
 
         # if final overall_stats and annular_stats exist -> skip
         if overall_stats_file.is_file() and annular_stats_file.is_file():
@@ -56,10 +58,7 @@ def process(
             )
             return
 
-        snapshot_series_joblib = raw_dir / f"{sim_exp_label}-raw.joblib"
-        obs_series_collection_joblib = obs_dir / f"{sim_exp_label}-obs.joblib"
-
-        # if series_collection exist -> load & export
+        # if series_collection exist -> load & export stats
         if obs_series_collection_joblib.is_file():
             series_collection = SnapshotSeriesCollection.from_joblib(
                 obs_series_collection_joblib
@@ -80,9 +79,10 @@ def process(
                 assembler = SnapshotAssembler(raw_data=loader.simulation_data)
                 series = assembler.assemble_all(is_strict=False)
 
-                # atomic write
                 series.to_joblib(snapshot_series_joblib)
+                logger.debug(f"[{sim_exp_label}] assembled and saved {series}.")
                 del loader, assembler
+                gc.collect()
 
             logger.info(f"[{sim_exp_label}] loaded {series}.")
 
@@ -96,25 +96,25 @@ def process(
                 is_verbose=True,
             )
 
-            # atomic write
             series_collection.to_joblib(obs_series_collection_joblib)
-            logger.info(f"[{sim_exp_label}] computed {series_collection}.")
+            logger.info(
+                f"[{sim_exp_label}] pseudo-observed and saved {series_collection}."
+            )
             del series, observer
+            gc.collect()
 
         # export overall_stats_df & annular_stats_df
         overall_stats_df = series_collection.statistics.copy()
         annular_stats_df = series_collection.annular_statistics.copy()
-
+        # insert simulation attributes into stats dfs
         for k, v in sim_attr_dict.items():
             overall_stats_df.insert(0, k, v)
             annular_stats_df.insert(0, k, v)
-
         # atomic write overall_stats & annular_stats
         atomic_export_df_csv(
             df=overall_stats_df,
             target_file=overall_stats_file,
         )
-
         atomic_export_df_csv(
             df=annular_stats_df,
             target_file=annular_stats_file,
@@ -122,12 +122,25 @@ def process(
 
         logger.info(f"[{sim_exp_label}] overall_stats_df & annular_stats_df saved.")
 
-        del series_collection, overall_stats_df, annular_stats_df
-
     except Exception as e:
         logger.exception(f"[{sim_exp_label}] failed: {e!r}")
     finally:
+        for name in [
+            "loader",
+            "assembler",
+            "observer",
+            "series",
+            "series_collection",
+            "overall_stats_df",
+            "annular_stats_df",
+        ]:
+            try:
+                exec(f"del {name}")
+            except NameError:
+                pass
+
         gc.collect()
+        logger.handlers.clear()
 
 
 def process_all(log_file: Path | str | None = None) -> None:
@@ -150,22 +163,22 @@ def process_all(log_file: Path | str | None = None) -> None:
             log_file=log_file,
         )
 
-    Parallel(n_jobs=30)(
+    Parallel(n_jobs=24, maxtasksperchild=1)(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
-        if attr_dict["init_mass_lv"] in [5, 6, 7, 8]
+        if attr_dict["init_mass_lv"] in [6, 7, 8]
     )
-    Parallel(n_jobs=12)(
+    Parallel(n_jobs=6, maxtasksperchild=1)(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
-        if attr_dict["init_mass_lv"] in [3, 4]
+        if attr_dict["init_mass_lv"] in [4, 5]
     )
-    Parallel(n_jobs=4)(
+    Parallel(n_jobs=4, maxtasksperchild=1)(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
-        if attr_dict["init_mass_lv"] in [2]
+        if attr_dict["init_mass_lv"] in [2, 3]
     )
-    Parallel(n_jobs=1)(
+    Parallel(n_jobs=1, maxtasksperchild=1)(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
         if attr_dict["init_mass_lv"] in [1]

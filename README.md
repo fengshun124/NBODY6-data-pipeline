@@ -73,9 +73,9 @@ The pipeline writes results under `OUTPUT_BASE` using the following structure (e
 
 - `cache/raw/` — cached raw `SnapshotSeries` joblib files named `<sim-label>-raw.joblib`.
 - `cache/obs/` — cached pseudo-observed `SnapshotSeriesCollection` joblib files named `<sim-label>-obs.joblib`.
-- `overall_stats/` — per-simulation overall statistics CSVs: `<sim-label>-overall_stats.csv`.
-- `annular_stats/` — per-simulation annular statistics CSVs: `<sim-label>-annular_stats.csv`.
-- `inclination_stats/` — inclination summaries: `<sim-label>-inclination_stats.csv`.
+- `stats/overall_stats/` — per-simulation overall statistics CSVs: `<sim-label>-overall_stats.csv`.
+- `stats/annular_stats/` — per-simulation annular statistics CSVs: `<sim-label>-annular_stats.csv`.
+- `stats/inclination_stats/` — inclination summaries: `<sim-label>-inclination_stats.csv`.
 - `log/` — script log files such as `batch.log` and per-run logs.
 - `figures/` — optional plots and figures produced by notebooks or scripts.
 
@@ -90,7 +90,7 @@ Use these caches to skip expensive parsing/assembly steps when rebuilding datase
 - Create and edit `.env` from `.env.template` with `SIM_ROOT_BASE` and `OUTPUT_BASE`.
 - Run `python ./src/collect_simulation_stats.py` to parse and cache simulations.
 - Run `python ./src/collect_inclination_stats.py` to compute inclination summaries.
-- Inspect `OUTPUT_BASE/cache/` and `OUTPUT_BASE/*_stats/` for results and logs.
+- Inspect `OUTPUT_BASE/cache/` and `OUTPUT_BASE/stats/*_stats/` for results and logs.
 
 ## Data Processing Pipeline Overview
 

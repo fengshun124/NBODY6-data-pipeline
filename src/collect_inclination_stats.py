@@ -34,20 +34,22 @@ def _calc_inclination(r: np.ndarray, v: np.ndarray, m: np.ndarray) -> float:
 
 def _summarize_inclination(snapshot: Snapshot) -> dict[str, object]:
     star_df = snapshot.stars.copy()
-    within_r_tidal_star_df = star_df[star_df["is_within_r_tidal"]].copy()
-    # remove bulk velocity calculated from stars within r_tidal
-    corr_star_df = star_df.copy()
-    bulk_velocity = within_r_tidal_star_df[["vx", "vy", "vz"]].mean().values
-    corr_star_df[["vx", "vy", "vz"]] = corr_star_df[["vx", "vy", "vz"]] - bulk_velocity
+
+    # calculate bulk velocity using stars within r_tidal
+    bulk_velocity = (
+        star_df.loc[star_df["is_within_r_tidal"], ["vx", "vy", "vz"]].mean().values
+    )
+    # remove bulk velocity
+    star_df.loc[:, ["vx", "vy", "vz"]] = star_df[["vx", "vy", "vz"]] - bulk_velocity
 
     # data indexed by name
-    kinematic_array = corr_star_df.set_index("name")[
+    kinematic_array = star_df.set_index("name")[
         ["x", "y", "z", "vx", "vy", "vz", "mass"]
     ].to_numpy()
-    distance_array = corr_star_df.set_index("name")[
+    distance_array = star_df.set_index("name")[
         ["dist_dc_pc", "dist_dc_r_tidal"]
     ].to_numpy()
-    name_to_idx = {name: idx for idx, name in enumerate(corr_star_df["name"].values)}
+    name_to_idx = {name: idx for idx, name in enumerate(star_df["name"].values)}
 
     wide_bin_sys_df = snapshot.binary_systems[
         snapshot.binary_systems["is_within_2x_r_tidal"]
@@ -139,7 +141,7 @@ def process(
 
     # prepare directories & logger
     raw_dir = OUTPUT_BASE / "cache" / "raw"
-    inclination_stats_dir = OUTPUT_BASE / "inclination_stats"
+    inclination_stats_dir = OUTPUT_BASE / "stats" / "inclination_stats"
     for p in [raw_dir, inclination_stats_dir]:
         p.mkdir(parents=True, exist_ok=True)
 
@@ -197,7 +199,18 @@ def process(
 
     except Exception as e:
         logger.exception(f"[{sim_exp_label}] Failed: {e!r}")
+    finally:
+        for name in [
+            "series",
+            "inclination_stats_df",
+        ]:
+            try:
+                exec(f"del {name}")
+            except NameError:
+                pass
+
         gc.collect()
+        logger.handlers.clear()
 
 
 def process_all(log_file: Path | str | None = None) -> None:
