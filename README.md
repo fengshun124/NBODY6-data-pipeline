@@ -85,7 +85,7 @@ Use these caches to skip expensive parsing/assembly steps when rebuilding datase
 
 - See the [`notebooks/`](./notebooks/) directory for Jupyter notebooks used for dataset preparation and visualization (for example, `dataset_split.ipynb`, `annular_stats.ipynb`, `overall_stat.ipynb`).
 
-### *Quick Checklist*
+### _Quick Checklist_
 
 - Create and edit `.env` from `.env.template` with `SIM_ROOT_BASE` and `OUTPUT_BASE`.
 - Run `python ./src/collect_simulation_stats.py` to parse and cache simulations.
@@ -120,11 +120,11 @@ Each `Snapshot` represents the cluster state at a single timestamp `time`, and c
 |   **`dist_dc_r_tidal`**    | Normalized distance: `dist_dc_pc / r_tidal`                                                             |
 | **`dist_dc_r_half_mass`**  | Normalized distance: `dist_dc_pc / r_half_mass`                                                         |
 |  **`is_within_r_tidal`**   | Boolean: `dist_dc_pc` $\leqslant$ `r_tidal`                                                             |
-| **`is_within_2x_r_tidal`** | Boolean: `dist_dc_pc` $\leqslant$ ($2\times$) `r_tidal`                                                 |
+| **`is_within_2x_r_tidal`** | Boolean: `dist_dc_pc` $\leqslant$ $2\times$ `r_tidal`                                                   |
 
 Two related “within tidal radius” flags are provided: `is_within_r_tidal` (within `r_tidal`) and `is_within_2x_r_tidal` (within $2r_{\text{tidal}}$).
 
-*_All radial quantities are measured relative to the density center from <u>densCentre.txt</u>._
+\*_All radial quantities are measured relative to the density center from <u>densCentre.txt</u>._
 
 Binary systems are classified as follows:
 
@@ -146,10 +146,10 @@ Each file contains data at multiple timestamps, `time` (in Myr):
 |     File Name      | Description                                                                                                                                                                                    | Key Columns                                                                                                                                                                                                    | Essential Header                                                                      |
 | :----------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 |     **OUT34**      | Position and velocity of ALL single stars, unregularized binaries, and the centers of mass of regularized binaries (`cmName`).                                                                 | `name`, `x`, `y`, `z` $[\mathrm{pc}]$, `vx`, `vy`, `vz` $[\mathrm{km\,s}^{-1}]$                                                                                                                                | `time`, galactic position (`rg` $\cdot$ `rbar`), bulk velocity (`vg` $\cdot$ `vstar`) |
-|      **OUT9**      | Pairing information and orbital attributes of **regularized binaries**. Each row links two component stars (`name1`, `name2`) to their common center of mass (`cmName`).                       | `cmName`, `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                             | `time`                                                                                |
-|    **fort.82**     | Stellar properties for both components of **regularized binaries**.                                                                                                                            | `name1`, `name2`, `mass1`, `mass2` $[\mathrm{M}_{\odot}]$, `rad1`, `rad2` $[\log_{10}(\mathrm{R}_{\odot})]$, `zlum1`, `zlum2` $[\log_{10}(\mathrm{L}_{\odot})]$, `tempe1` `tempe2` $[\log_{10}({\mathrm{K}})]$ | `time`                                                                                |
-|    **fort.83**     | Stellar properties for **single stars** and **unregularized binaries**.                                                                                                                        | `name`, `mass` $[\mathrm{M}_{\odot}]$, `rad` $[\log_{10}(\mathrm{R}_{\odot})]$, `zlum` $[\log_{10}(\mathrm{L}_{\odot})]$, `tempe` $[\log_{10}({\mathrm{K}})]$                                                  | `time`                                                                                |
+|    **fort.83**     | Stellar properties for **single stars** and **unregularized binaries**. This includes mass, radius, bolometric luminosity, and effective temperature, mass                                     | `name`, `mass` $[\mathrm{M}_{\odot}]$, `rad` $[\log_{10}(\mathrm{R}_{\odot})]$, `zlum` $[\log_{10}(\mathrm{L}_{\odot})]$, `tempe` $[\log_{10}({\mathrm{K}})]$                                                  | `time`                                                                                |
 |    **fort.19**     | Pairing information for **unregularized binaries**. Binary components (`name1` / `name2`) may reference regularized binary centers (`cmName`).                                                 | `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                                       | `time`                                                                                |
+|    **fort.82**     | Stellar properties for both components of **regularized binaries**.                                                                                                                            | `name1`, `name2`, `mass1`, `mass2` $[\mathrm{M}_{\odot}]$, `rad1`, `rad2` $[\log_{10}(\mathrm{R}_{\odot})]$, `zlum1`, `zlum2` $[\log_{10}(\mathrm{L}_{\odot})]$, `tempe1` `tempe2` $[\log_{10}({\mathrm{K}})]$ | `time`                                                                                |
+|      **OUT9**      | Pairing information and orbital attributes of **regularized binaries**. Each row links two component stars (`name1`, `name2`) to their common center of mass (`cmName`).                       | `cmName`, `name1`, `name2`, `ecc`, `p` $\log_{10}([\mathrm{day}])$                                                                                                                                             | `time`                                                                                |
 | **densCentre.txt** | Recalculated cluster density center and tidal radius from density profile analysis. Used as the primary reference for all distance calculations. This is NOT a standard output of NBODY6 code. | `time`, `r_tidal` $[\mathrm{pc}]$, `density_center_x`, `density_center_y`, `density_center_z` $[\mathrm{pc}]$                                                                                                  | — (data serves as header)                                                             |
 
 These files are parsed by specialized [`FileParser`](./src/nbody6/parser/) classes, coordinated by [`NBODY6DataLoader`](./src/nbody6/loader.py).  
@@ -234,4 +234,3 @@ Extend `PseudoObserver` with a synthetic photometry step so pseudo-observed snap
 4. Apply a selection model (magnitude limits and completeness), optionally adding simple photometric noise and basic blending heuristics.
 
 Practical tools to support the under-implemented pieces include [`synphot`](https://synphot.readthedocs.io/) for synthetic photometry and bandpass-based flux integration, plus [`speclite`](https://speclite.readthedocs.io/) and [`sedpy`](https://sedpy.readthedocs.io/) for filter and transmission-curve utilities.
-

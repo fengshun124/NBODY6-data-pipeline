@@ -1,5 +1,3 @@
-from typing import Tuple
-
 import astropy.units as u
 import numpy as np
 import pandas as pd
@@ -10,7 +8,7 @@ from astropy.coordinates import (
     SkyOffsetFrame,
 )
 
-Coordinate3D = Tuple[float, float, float]
+Coordinate3D = tuple[float, float, float]
 
 
 def calc_half_mass_radius(

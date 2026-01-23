@@ -6,10 +6,11 @@ from typing import Callable, Iterator
 import joblib
 import pandas as pd
 
-from nbody6.calc.cluster import Coordinate3D
 from nbody6.calc.summary import summarize_timestamp_stats
 from nbody6.data.series import SnapshotSeries
 from nbody6.data.snapshot import Snapshot
+
+Coordinate3D = tuple[float, float, float]
 
 
 @dataclass(slots=True)
@@ -53,7 +54,7 @@ class SnapshotSeriesCollection:
             self._parent_invalidator()
 
     def __setattr__(self, name: str, value) -> None:
-        if hasattr(self, "_cache_summary") and name == "series_dict":
+        if hasattr(self, "_cache_stats") and name == "series_dict":
             try:
                 object.__setattr__(self, name, value)
             finally:

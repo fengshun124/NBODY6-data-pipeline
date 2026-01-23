@@ -9,10 +9,7 @@ import pandas as pd
 
 from nbody6.calc.summary import summarize_descriptive_stats
 
-try:
-    from nbody6.calc.cluster import Coordinate3D
-except Exception:
-    Coordinate3D = tuple[float, float, float]
+Coordinate3D = tuple[float, float, float]
 
 
 @dataclass(slots=True)
@@ -39,7 +36,7 @@ class Snapshot:
             ("stars", self.stars),
             ("binary_systems", self.binary_systems),
         ]:
-            if df.isnull().values.any():
+            if df.isnull().any().any():
                 nan_cols = df.columns[df.isnull().any()].tolist()
                 raise ValueError(
                     f"DataFrame {df_name} contains NaN values in columns: "
@@ -57,7 +54,7 @@ class Snapshot:
             self._parent_invalidator()
 
     def __setattr__(self, name: str, value) -> None:
-        if hasattr(self, "_cache_summary") and name in [
+        if hasattr(self, "_cache_stats") and name in [
             "time",
             "header",
             "stars",
@@ -324,10 +321,25 @@ class Snapshot:
         stars_df = self.stars
         bin_sys_df = self.binary_systems
 
-        binary_pairs = set(bin_sys_df["pair"])
+        binary_pairs: set[tuple] = set()
+        for p in bin_sys_df["pair"]:
+            try:
+                binary_pairs.add(tuple(p))
+            except Exception:
+                # skip unhashable/malformed pair entries
+                continue
+
+        def _hierarchy_contains_pair(h):
+            try:
+                if h is None or (isinstance(h, float) and np.isnan(h)):
+                    return False
+                return bool(binary_pairs & set(h))
+            except Exception:
+                return False
+
         binary_star_flags = (
             stars_df["hierarchy"]
-            .apply(lambda h: bool(binary_pairs & set(h)))
+            .apply(_hierarchy_contains_pair)
             .to_numpy(dtype=np.int8, copy=False)
             if not stars_df.empty
             else np.array([], dtype=np.int8)
@@ -436,7 +448,7 @@ class PseudoObservedSnapshot(Snapshot):
     raw_binary_systems: pd.DataFrame
 
     def __setattr__(self, name, value) -> None:
-        if hasattr(self, "_cache_summary") and name in [
+        if hasattr(self, "_cache_stats") and name in [
             "time",
             "header",
             "stars",
@@ -445,7 +457,10 @@ class PseudoObservedSnapshot(Snapshot):
             "raw_stars",
             "raw_binary_systems",
         ]:
-            self._invalidate_self_and_parent()
+            try:
+                self._invalidate_self_and_parent()
+            except Exception:
+                self._clear_cache()
         object.__setattr__(self, name, value)
 
     def __repr__(self) -> str:
@@ -499,10 +514,7 @@ class PseudoObservedSnapshot(Snapshot):
             x, y, z = float(sgc["x"]), float(sgc["y"]), float(sgc["z"])
         else:
             x, y, z = sgc
-        try:
-            sim_gc = Coordinate3D(x, y, z)
-        except Exception:
-            sim_gc = (x, y, z)
+        sim_gc = (float(x), float(y), float(z))
 
         return cls(
             time=float(data["time"]),

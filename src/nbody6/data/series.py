@@ -42,7 +42,7 @@ class SnapshotSeries:
             self._parent_invalidator()
 
     def __setattr__(self, name: str, value) -> None:
-        if hasattr(self, "_cache_summary") and name == "snapshot_dict":
+        if hasattr(self, "_cache_stats") and name == "snapshot_dict":
             # clear before rebinding
             try:
                 object.__setattr__(self, name, value)
