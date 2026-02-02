@@ -1,5 +1,6 @@
 import gc
 import logging
+import os
 from pathlib import Path
 
 import numpy as np
@@ -24,6 +25,7 @@ def process(
     sim_exp_label: str,
     sim_attr_dict: dict[str, int | float],
     log_file: Path | str | None = None,
+    is_verbose: bool = True,
 ) -> None:
     # setup logger
     setup_logger(
@@ -54,7 +56,7 @@ def process(
         # if final overall_stats and annular_stats exist -> skip
         if overall_stats_file.is_file() and annular_stats_file.is_file():
             logger.info(
-                f"[{sim_exp_label}] overall_stats_df & annular_stats_df exist, skip."
+                f"[{sim_exp_label}] overall_stats_df & annular_stats_df exist. Skip."
             )
             return
 
@@ -69,15 +71,22 @@ def process(
             # if series exist -> load, compute series_collection & export
             if snapshot_series_joblib.is_file():
                 series = SnapshotSeries.from_joblib(snapshot_series_joblib)
-                logger.debug(f"[{sim_exp_label}] loading series ...")
+                logger.debug(f"[{sim_exp_label}] loaded {series}.")
             else:
                 # start from beginning -> load raw data, assemble series & export
                 loader = NBODY6DataLoader(root=sim_path)
                 logger.debug(f"[{sim_exp_label}] loading {loader} ...")
-                loader.load(is_strict=True, is_allow_timestamp_trim=True)
+                loader.load(
+                    is_strict=True,
+                    is_allow_timestamp_trim=True,
+                    is_verbose=is_verbose,
+                )
 
                 assembler = SnapshotAssembler(raw_data=loader.simulation_data)
-                series = assembler.assemble_all(is_strict=False)
+                series = assembler.assemble_all(
+                    is_strict=False,
+                    is_verbose=is_verbose,
+                )
 
                 series.to_joblib(snapshot_series_joblib)
                 logger.debug(f"[{sim_exp_label}] assembled and saved {series}.")
@@ -87,13 +96,14 @@ def process(
             logger.info(f"[{sim_exp_label}] loaded {series}.")
 
             observer = PseudoObserver(series)
+            # assume star cluster located along x-axis, observe from multiple distances
             series_collection = observer.observe(
                 coordinates=[
                     [dist, 0, 0]
                     for dist in np.arange(50, 600, 50).tolist()
                     + np.arange(600, 1300, 100).tolist()
                 ],
-                is_verbose=True,
+                is_verbose=is_verbose,
             )
 
             series_collection.to_joblib(obs_series_collection_joblib)
@@ -106,6 +116,8 @@ def process(
         # export overall_stats_df & annular_stats_df
         overall_stats_df = series_collection.statistics.copy()
         annular_stats_df = series_collection.annular_statistics.copy()
+        del series_collection
+        gc.collect()
         # insert simulation attributes into stats dfs
         for k, v in sim_attr_dict.items():
             overall_stats_df.insert(0, k, v)
@@ -123,22 +135,36 @@ def process(
         logger.info(f"[{sim_exp_label}] overall_stats_df & annular_stats_df saved.")
 
     except Exception as e:
-        logger.exception(f"[{sim_exp_label}] failed: {e!r}")
+        logger.exception(f"[{sim_exp_label}] Failed: {e!r}")
     finally:
-        for name in [
-            "loader",
-            "assembler",
-            "observer",
-            "series",
-            "series_collection",
-            "overall_stats_df",
-            "annular_stats_df",
-        ]:
-            try:
-                exec(f"del {name}")
-            except NameError:
-                pass
-
+        try:
+            del loader
+        except NameError:
+            pass
+        try:
+            del assembler
+        except NameError:
+            pass
+        try:
+            del observer
+        except NameError:
+            pass
+        try:
+            del series
+        except NameError:
+            pass
+        try:
+            del series_collection
+        except NameError:
+            pass
+        try:
+            del overall_stats_df
+        except NameError:
+            pass
+        try:
+            del annular_stats_df
+        except NameError:
+            pass
         gc.collect()
         logger.handlers.clear()
 
@@ -152,6 +178,9 @@ def process_all(log_file: Path | str | None = None) -> None:
     )
     setup_logger(log_file)
 
+    # entry PID
+    logger.info(f"Batch processing started. Entry PID: {os.getpid()}")
+
     simulations = fetch_sim_root(SIM_ROOT_BASE)
     logger.info(f"Fetched {len(simulations)} simulations from {SIM_ROOT_BASE}.")
 
@@ -161,28 +190,59 @@ def process_all(log_file: Path | str | None = None) -> None:
             sim_exp_label=sim_label,
             sim_attr_dict=sim_dict,
             log_file=log_file,
+            is_verbose=False,
         )
 
-    Parallel(n_jobs=24, maxtasksperchild=1)(
+    for _ in Parallel(
+        n_jobs=30,
+        return_as="generator",
+        pre_dispatch="n_jobs",
+        batch_size=1,
+    )(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
         if attr_dict["init_mass_lv"] in [6, 7, 8]
-    )
-    Parallel(n_jobs=6, maxtasksperchild=1)(
+    ):
+        pass
+    gc.collect()
+
+    for _ in Parallel(
+        n_jobs=6,
+        return_as="generator",
+        pre_dispatch="n_jobs",
+        batch_size=1,
+    )(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
         if attr_dict["init_mass_lv"] in [4, 5]
-    )
-    Parallel(n_jobs=4, maxtasksperchild=1)(
+    ):
+        pass
+    gc.collect()
+
+    for _ in Parallel(
+        n_jobs=4,
+        return_as="generator",
+        pre_dispatch="n_jobs",
+        batch_size=1,
+    )(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
         if attr_dict["init_mass_lv"] in [2, 3]
-    )
-    Parallel(n_jobs=1, maxtasksperchild=1)(
+    ):
+        pass
+    gc.collect()
+
+    for _ in Parallel(
+        n_jobs=1,
+        return_as="generator",
+        pre_dispatch="n_jobs",
+        batch_size=1,
+    )(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
         if attr_dict["init_mass_lv"] in [1]
-    )
+    ):
+        pass
 
     logger.info(f"All {len(simulations)} simulations processed.")
 

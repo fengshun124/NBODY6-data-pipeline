@@ -1,6 +1,7 @@
 import gc
 import json
 import logging
+import os
 from pathlib import Path
 
 import numpy as np
@@ -33,7 +34,7 @@ def _calc_inclination(r: np.ndarray, v: np.ndarray, m: np.ndarray) -> float:
 
 
 def _summarize_inclination(snapshot: Snapshot) -> dict[str, object]:
-    star_df = snapshot.stars.copy()
+    star_df = snapshot.stars
 
     # calculate bulk velocity using stars within r_tidal
     bulk_velocity = (
@@ -129,6 +130,7 @@ def process(
     sim_exp_label: str,
     sim_attr_dict: dict[str, int | float],
     log_file: Path | str | None = None,
+    is_verbose: bool = False,
 ) -> None:
     # setup logger
     setup_logger(
@@ -139,7 +141,7 @@ def process(
         )
     )
 
-    # prepare directories & logger
+    # prepare directories
     raw_dir = OUTPUT_BASE / "cache" / "raw"
     inclination_stats_dir = OUTPUT_BASE / "stats" / "inclination_stats"
     for p in [raw_dir, inclination_stats_dir]:
@@ -166,16 +168,27 @@ def process(
         else:
             loader = NBODY6DataLoader(root=sim_path)
             logger.debug(f"[{sim_exp_label}] loading {loader}")
-            loader.load(is_strict=True, is_allow_timestamp_trim=True)
+            loader.load(
+                is_strict=True,
+                is_allow_timestamp_trim=True,
+                is_verbose=is_verbose,
+            )
 
-            assembler = SnapshotAssembler(raw_data=loader.simulation_data)
-            series = assembler.assemble_all(is_strict=False)
+            assembler = SnapshotAssembler(
+                raw_data=loader.simulation_data,
+            )
+            series = assembler.assemble_all(
+                is_strict=False,
+                is_verbose=is_verbose,
+            )
 
             series.to_joblib(snapshot_series_joblib)
+            logger.debug(f"[{sim_exp_label}] assembled and saved {series}.")
 
             del loader, assembler
             gc.collect()
 
+        logger.info(f"[{sim_exp_label}] loaded {series}.")
         logger.debug(f"[{sim_exp_label}] calculating inclination statistics ...")
 
         inclination_stats_df = pd.DataFrame(
@@ -187,10 +200,12 @@ def process(
                 for time, snapshot in series
             ]
         )
+        del series
+        gc.collect()
+
         # append sim attributes
         for k, v in sim_attr_dict.items():
             inclination_stats_df.insert(0, k, v)
-
         atomic_export_df_csv(
             df=inclination_stats_df,
             target_file=inclination_stats_file,
@@ -200,15 +215,22 @@ def process(
     except Exception as e:
         logger.exception(f"[{sim_exp_label}] Failed: {e!r}")
     finally:
-        for name in [
-            "series",
-            "inclination_stats_df",
-        ]:
-            try:
-                exec(f"del {name}")
-            except NameError:
-                pass
-
+        try:
+            del loader
+        except NameError:
+            pass
+        try:
+            del assembler
+        except NameError:
+            pass
+        try:
+            del series
+        except NameError:
+            pass
+        try:
+            del inclination_stats_df
+        except NameError:
+            pass
         gc.collect()
         logger.handlers.clear()
 
@@ -222,7 +244,13 @@ def process_all(log_file: Path | str | None = None) -> None:
     )
     setup_logger(log_file)
 
-    simulations = fetch_sim_root(SIM_ROOT_BASE)
+    # entry PID
+    logger.info(f"Batch processing started. Entry PID: {os.getpid()}")
+
+    simulations = fetch_sim_root(
+        SIM_ROOT_BASE,
+        is_reverse=True,
+    )
     logger.info(f"Fetched {len(simulations)} simulations from {SIM_ROOT_BASE}.")
 
     def run(sim_dict, sim_path, sim_label):
@@ -231,11 +259,16 @@ def process_all(log_file: Path | str | None = None) -> None:
             sim_exp_label=sim_label,
             sim_attr_dict=sim_dict,
             log_file=log_file,
+            is_verbose=False,
         )
 
-    Parallel(n_jobs=30)(
-        delayed(run)(attr_dict, path, label) for attr_dict, path, label in simulations
-    )
+    for _ in Parallel(
+        n_jobs=30,
+        return_as="generator",
+        pre_dispatch="n_jobs",
+        batch_size=1,
+    )(delayed(run)(attr_dict, path, label) for attr_dict, path, label in simulations):
+        pass
 
     logger.info(f"All {len(simulations)} simulations processed.")
 
