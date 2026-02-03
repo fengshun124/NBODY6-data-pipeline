@@ -171,7 +171,10 @@ class PseudoObserver:
         ).assign(is_binary=True, is_unresolved_binary=True)
 
     def _observe(
-        self, coordinate: Coordinate3D, snapshot: Snapshot
+        self,
+        coordinate: Coordinate3D,
+        snapshot: Snapshot,
+        is_slim: bool = True,
     ) -> PseudoObservedSnapshot:
         # pre-filter to 2x r_tidal
         stars_df = snapshot.stars[snapshot.stars["is_within_2x_r_tidal"]].copy()
@@ -264,14 +267,19 @@ class PseudoObserver:
             binary_systems=bin_sys_df.sort_values(
                 by=["obj1_ids", "obj2_ids"]
             ).reset_index(drop=True),
-            raw_stars=snapshot.stars,
-            raw_binary_systems=snapshot.binary_systems,
+            raw_stars=pd.DataFrame(columns=snapshot.stars.columns)
+            if is_slim
+            else snapshot.stars,
+            raw_binary_systems=pd.DataFrame(columns=snapshot.binary_systems.columns)
+            if is_slim
+            else snapshot.binary_systems,
         )
 
     def observe(
         self,
         coordinates: Coordinate3D | list[Coordinate3D],
         is_verbose: bool = True,
+        is_slim: bool = True,
     ) -> SnapshotSeriesCollection:
         if (
             isinstance(coordinates, list)
@@ -308,7 +316,9 @@ class PseudoObserver:
                 if (
                     key := self._cache_key(coord, ts)
                 ) not in self._cache_obs_snapshot_dict:
-                    self._cache_obs_snapshot_dict[key] = self._observe(coord, snapshot)
+                    self._cache_obs_snapshot_dict[key] = self._observe(
+                        coord, snapshot, is_slim=is_slim
+                    )
                 obs_snapshot_dict[ts] = self._cache_obs_snapshot_dict[key]
 
             obs_series_dict[coord] = SnapshotSeries(snapshot_dict=obs_snapshot_dict)

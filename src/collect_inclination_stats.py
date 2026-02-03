@@ -4,6 +4,7 @@ import logging
 import os
 from pathlib import Path
 
+import click
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
@@ -235,6 +236,14 @@ def process(
         logger.handlers.clear()
 
 
+@click.command()
+@click.option(
+    "--log-file",
+    "log_file",
+    type=click.Path(),
+    default=None,
+    help="Path to log file. If not specified, uses default location '<OUTPUT_BASE>/log/batch_collect_inclination.log'.",
+)
 def process_all(log_file: Path | str | None = None) -> None:
     # setup logger
     log_file = (

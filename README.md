@@ -52,20 +52,28 @@ cp .env.template .env
 - Parse and assemble raw NBODY6 outputs (build `SnapshotSeries`, cache results with `joblib`, and export overall/annular statistics):
 
   ```sh
-  python ./src/collect_simulation_stats.py
+  python ./src/collect_simulation_stats.py [--slim|--full] [--log-file PATH]
   ```
+
+  **Options:**
+  - `--slim` (default): Store only snapshot headers in cache to reduce storage.
+  - `--full`: Store complete raw snapshots including all star data.
+  - `--log-file PATH`: Specify custom log file path. Defaults to `OUTPUT_BASE/log/batch_collect_simulation.log`.
 
 - Compute inclination statistics (produces per-snapshot inclination summaries):
 
   ```sh
-  python ./src/collect_inclination_stats.py
+  python ./src/collect_inclination_stats.py [--log-file PATH]
   ```
+  
+  **Options:**
+  - `--log-file PATH`: Specify custom log file path. Defaults to `OUTPUT_BASE/log/batch_collect_inclination.log`.
 
 Notes:
 
 - Both scripts read raw data from `SIM_ROOT_BASE` and write outputs under `OUTPUT_BASE` (see `.env`).
-- Scripts use `joblib` for parallel processing; adjust core counts inside the scripts if needed.
-- Check `OUTPUT_BASE/log/` for progress when debugging.
+- Core counts and parallelism can be adjusted in the scripts.
+- Check `OUTPUT_BASE/log/` for progress when debugging (if not using `--log-file`).
 
 ### Outputs
 

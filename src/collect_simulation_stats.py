@@ -3,6 +3,7 @@ import logging
 import os
 from pathlib import Path
 
+import click
 import numpy as np
 from joblib import Parallel, delayed
 from nbody6.assembler import SnapshotAssembler
@@ -26,6 +27,7 @@ def process(
     sim_attr_dict: dict[str, int | float],
     log_file: Path | str | None = None,
     is_verbose: bool = True,
+    is_slim: bool = True,
 ) -> None:
     # setup logger
     setup_logger(
@@ -104,6 +106,7 @@ def process(
                     + np.arange(600, 1300, 100).tolist()
                 ],
                 is_verbose=is_verbose,
+                is_slim=is_slim,
             )
 
             series_collection.to_joblib(obs_series_collection_joblib)
@@ -169,7 +172,20 @@ def process(
         logger.handlers.clear()
 
 
-def process_all(log_file: Path | str | None = None) -> None:
+@click.command()
+@click.option(
+    "--slim/--full",
+    default=True,
+    help="Use slim mode (store only headers) or full mode (store complete raw snapshots). Default: slim.",
+)
+@click.option(
+    "--log-file",
+    "log_file",
+    type=click.Path(),
+    default=None,
+    help="Path to log file. If not specified, uses default location '<OUTPUT_BASE>/log/batch_collect_simulation.log'.",
+)
+def process_all(slim: bool, log_file: Path | str | None) -> None:
     # setup logger
     log_file = (
         Path(log_file).resolve()
@@ -191,6 +207,7 @@ def process_all(log_file: Path | str | None = None) -> None:
             sim_attr_dict=sim_dict,
             log_file=log_file,
             is_verbose=False,
+            is_slim=slim,
         )
 
     for _ in Parallel(
@@ -207,7 +224,7 @@ def process_all(log_file: Path | str | None = None) -> None:
     gc.collect()
 
     for _ in Parallel(
-        n_jobs=6,
+        n_jobs=12,
         return_as="generator",
         pre_dispatch="n_jobs",
         batch_size=1,
@@ -220,29 +237,17 @@ def process_all(log_file: Path | str | None = None) -> None:
     gc.collect()
 
     for _ in Parallel(
-        n_jobs=4,
+        n_jobs=2,
         return_as="generator",
         pre_dispatch="n_jobs",
         batch_size=1,
     )(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
-        if attr_dict["init_mass_lv"] in [2, 3]
+        if attr_dict["init_mass_lv"] in [1, 2, 3]
     ):
         pass
     gc.collect()
-
-    for _ in Parallel(
-        n_jobs=1,
-        return_as="generator",
-        pre_dispatch="n_jobs",
-        batch_size=1,
-    )(
-        delayed(run)(attr_dict, path, label)
-        for attr_dict, path, label in simulations
-        if attr_dict["init_mass_lv"] in [1]
-    ):
-        pass
 
     logger.info(f"All {len(simulations)} simulations processed.")
 
