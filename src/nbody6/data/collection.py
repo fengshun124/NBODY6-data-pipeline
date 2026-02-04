@@ -162,7 +162,7 @@ class SnapshotSeriesCollection:
         tmp_filepath = filepath.with_suffix(filepath.suffix + ".tmp")
         try:
             joblib.dump(
-                self.to_dict(is_materialize=True),
+                self.to_dict(is_materialize=False),
                 tmp_filepath,
                 compress=3,
             )
@@ -205,7 +205,7 @@ class SnapshotSeriesCollection:
 
         stats_dfs = []
         for coord, series in self.series_dict.items():
-            series_stats = series.statistics.copy()
+            series_stats = series.statistics
             series_stats.insert(0, "galactic_x", coord[0])
             series_stats.insert(1, "galactic_y", coord[1])
             series_stats.insert(2, "galactic_z", coord[2])
@@ -230,11 +230,10 @@ class SnapshotSeriesCollection:
             if series_annular.empty:
                 continue
 
-            series_annular_copy = series_annular.copy()
-            series_annular_copy.insert(0, "galactic_x", coord[0])
-            series_annular_copy.insert(1, "galactic_y", coord[1])
-            series_annular_copy.insert(2, "galactic_z", coord[2])
-            annular_stats_dfs.append(series_annular_copy)
+            series_annular.insert(0, "galactic_x", coord[0])
+            series_annular.insert(1, "galactic_y", coord[1])
+            series_annular.insert(2, "galactic_z", coord[2])
+            annular_stats_dfs.append(series_annular)
 
         return (
             pd.concat(annular_stats_dfs, ignore_index=True)

@@ -520,26 +520,30 @@ class PseudoObservedSnapshot(Snapshot):
             time=float(data["time"]),
             header=dict(data["header"]),
             stars=(
-                pd.DataFrame(data["stars"])
+                stars_df := pd.DataFrame(data["stars"])
                 if isinstance(data["stars"], list)
                 else data["stars"]
             ),
             binary_systems=(
-                pd.DataFrame(data["binary_systems"])
+                binary_systems_df := pd.DataFrame(data["binary_systems"])
                 if isinstance(data["binary_systems"], list)
                 else data["binary_systems"]
             ),
             sim_galactic_center=sim_gc,
-            raw_stars=(
-                pd.DataFrame(data["raw_stars"])
+            raw_stars=raw_stars
+            if not (
+                raw_stars := pd.DataFrame(data["raw_stars"])
                 if isinstance(data["raw_stars"], list)
                 else data["raw_stars"]
-            ),
-            raw_binary_systems=(
-                pd.DataFrame(data["raw_binary_systems"])
+            ).empty
+            else pd.DataFrame(columns=stars_df.columns),
+            raw_binary_systems=raw_binary_systems
+            if not (
+                raw_binary_systems := pd.DataFrame(data["raw_binary_systems"])
                 if isinstance(data["raw_binary_systems"], list)
                 else data["raw_binary_systems"]
-            ),
+            ).empty
+            else pd.DataFrame(columns=binary_systems_df.columns),
         )
 
     @property

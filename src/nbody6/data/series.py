@@ -7,7 +7,7 @@ import joblib
 import pandas as pd
 
 from nbody6.calc.summary import summarize_timestamp_stats
-from nbody6.data.snapshot import Snapshot
+from nbody6.data.snapshot import PseudoObservedSnapshot, Snapshot
 
 
 @dataclass(slots=True)
@@ -125,7 +125,11 @@ class SnapshotSeries:
     def from_dict(cls, data: dict) -> "SnapshotSeries":
         obj = cls(
             snapshot_dict={
-                float(timestamp): Snapshot.from_dict(snapshot)
+                float(timestamp): (
+                    PseudoObservedSnapshot.from_dict(snapshot)
+                    if "sim_galactic_center" in snapshot
+                    else Snapshot.from_dict(snapshot)
+                )
                 for timestamp, snapshot in data.items()
             }
         )

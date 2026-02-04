@@ -177,10 +177,10 @@ class PseudoObserver:
         is_slim: bool = True,
     ) -> PseudoObservedSnapshot:
         # pre-filter to 2x r_tidal
-        stars_df = snapshot.stars[snapshot.stars["is_within_2x_r_tidal"]].copy()
+        stars_df = snapshot.stars[snapshot.stars["is_within_2x_r_tidal"]].reset_index(drop=True)
         bin_sys_df = snapshot.binary_systems.loc[
             snapshot.binary_systems["is_within_2x_r_tidal"]
-        ].copy()
+        ].reset_index(drop=True)
 
         # update hierarchy, is_binary, is_multi_system
         binary_pairs = set(bin_sys_df["pair"])
@@ -206,7 +206,6 @@ class PseudoObserver:
 
         # resolvability and resolved set
         if not bin_sys_df.empty:
-            bin_sys_df = bin_sys_df.copy()
             obs_dist_map = stars_df.set_index("name")["dist_pc"].to_dict()
 
             # mean of observed distances of all components
@@ -235,14 +234,13 @@ class PseudoObserver:
 
         resolved_stars_df = (
             stars_df[stars_df["name"].isin(resolved_star_names)]
-            .copy()
             .assign(is_unresolved_binary=False, is_binary=True)
         )
 
         # unresolved systems -> merged measurements
         unresolved_bin_sys_df = bin_sys_df[
             bin_sys_df["is_unresolved_binary_system"]
-        ].copy()
+        ]
         unresolved_stars_df = self._merge_unresolved_systems(
             unresolved_bin_sys_df=unresolved_bin_sys_df,
             name_attr_map=name_attr_map,

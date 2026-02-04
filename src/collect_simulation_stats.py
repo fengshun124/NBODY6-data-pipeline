@@ -117,14 +117,14 @@ def process(
             gc.collect()
 
         # export overall_stats_df & annular_stats_df
-        overall_stats_df = series_collection.statistics.copy()
-        annular_stats_df = series_collection.annular_statistics.copy()
-        del series_collection
-        gc.collect()
+        overall_stats_df = series_collection.statistics
+        annular_stats_df = series_collection.annular_statistics
         # insert simulation attributes into stats dfs
         for k, v in sim_attr_dict.items():
             overall_stats_df.insert(0, k, v)
             annular_stats_df.insert(0, k, v)
+        del series_collection
+        gc.collect()
         # atomic write overall_stats & annular_stats
         atomic_export_df_csv(
             df=overall_stats_df,
@@ -231,7 +231,7 @@ def process_all(slim: bool, log_file: Path | str | None) -> None:
     )(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
-        if attr_dict["init_mass_lv"] in [4, 5]
+        if attr_dict["init_mass_lv"] in [3, 4, 5]
     ):
         pass
     gc.collect()
@@ -244,7 +244,7 @@ def process_all(slim: bool, log_file: Path | str | None) -> None:
     )(
         delayed(run)(attr_dict, path, label)
         for attr_dict, path, label in simulations
-        if attr_dict["init_mass_lv"] in [1, 2, 3]
+        if attr_dict["init_mass_lv"] in [1, 2]
     ):
         pass
     gc.collect()
