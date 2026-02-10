@@ -4,12 +4,17 @@ import numpy as np
 from astropy import units as u
 from astropy.constants import G, M_sun
 
+LN10 = np.log(10.0)
+
 
 def calc_total_log_luminosity(log_L_L_sol1: float, log_L_L_sol2: float) -> float:
     # L_total = L1 + L2
     # L_total/L_sol = 10**log_L_L_sol1 + 10**log_L_L_sol2
+    # ---
+    # Use log-sum-exp in ln-space for numerical stability.
     # log10(L_total/L_sol) = log10(10**log_L_L_sol1 + 10**log_L_L_sol2) [log10(L_sol)]
-    return float(np.log10(10**log_L_L_sol1 + 10**log_L_L_sol2))
+    # = ln(10**log_L_L_sol1 + 10**log_L_L_sol2) / ln(10)
+    return float(np.logaddexp(log_L_L_sol1 * LN10, log_L_L_sol2 * LN10) / LN10)
 
 
 def calc_equivalent_radius(r_R_sol1: float, r_R_sol2: float) -> float:
@@ -21,7 +26,13 @@ def calc_equivalent_radius(r_R_sol1: float, r_R_sol2: float) -> float:
 def calc_log_equivalent_radius(log_R_R_sol1: float, log_R_R_sol2: float) -> float:
     # r_eq = sqrt((10**log_r1)^2 + (10**log_r2)^2) [R_sol]
     # log_r_eq = log10(r_eq) [log10(R_sol)]
-    return np.log10(calc_equivalent_radius(10**log_R_R_sol1, 10**log_R_R_sol2))
+    # ---
+    # Use log-sum-exp in ln-space for numerical stability.
+    # log10(sqrt(10^(2*log_r1) + 10^(2*log_r2))) = 0.5 * log10(10^(2*log_r1) + 10^(2*log_r2))
+    # = 0.5 * (ln(10^(2*log_r1) + 10^(2*log_r2)) / ln(10))
+    return float(
+        0.5 * (np.logaddexp(2 * log_R_R_sol1 * LN10, 2 * log_R_R_sol2 * LN10) / LN10)
+    )
 
 
 def calc_total_mass(mass_M_sol1: float, mass_M_sol2: float) -> float:
