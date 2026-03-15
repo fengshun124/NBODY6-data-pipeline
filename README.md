@@ -103,7 +103,6 @@ The [`notebooks/`](./notebooks/) directory contains Jupyter notebooks for datase
 
 - [`dataset_split.ipynb`](./notebooks/dataset_split.ipynb) — train/validation/test split generation
 - [`overall_stat.ipynb`](./notebooks/overall_stat.ipynb) — cluster-wide statistics
-- [`annular_stats.ipynb`](./notebooks/annular_stats.ipynb) — annular statistics and plots
 - [`filtered_annular_stats.ipynb`](./notebooks/filtered_annular_stats.ipynb) — filtered annular statistics
 - [`inclination.ipynb`](./notebooks/inclination.ipynb) — inclination analysis of wide binary systems
 
