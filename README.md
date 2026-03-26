@@ -1,6 +1,6 @@
 # NBODY6 Data Pipeline & Analysis
 
-This project provides a pipeline that transforms raw NBODY6 outputs into analysis-ready "pseudo-observed" data by parsing files, assembling time-series snapshots, and simulating observational constraints.
+This module turns raw NBODY6 outputs into analysis-ready, pseudo-observed data products by parsing files, assembling time-series snapshots, and applying observational constraints.
 
 The core workflow is shown below.
 
@@ -27,7 +27,7 @@ flowchart TD
 
 ## Requirements
 
-Use Python 3.12+ with the packages below. Pinned versions are listed in [`requirements.txt`](./requirements.txt).
+Use Python 3.12+ for this module. Pinned versions are listed in [`requirements.txt`](./requirements.txt).
 
 - `astropy`
 - `pandas`
@@ -44,7 +44,9 @@ Use Python 3.12+ with the packages below. Pinned versions are listed in [`requir
 
 ### Configure Environment
 
-Create a `.env` from [`.env.template`](.env.template), then set these variables.
+Run the commands below from the `data-pipeline/` directory.
+
+Create a `.env` from [`.env.template`](.env.template), then set:
 
 - `SIM_ROOT_BASE`: path to raw NBODY6 outputs
 - `OUTPUT_BASE`: destination for pipeline outputs
@@ -95,18 +97,19 @@ The pipeline writes results under `OUTPUT_BASE` using this structure.
 - `log/` — script log files such as `batch.log` and per-run logs.
 - `figures/` — optional plots and figures produced by notebooks or scripts.
 
-Use these caches to skip expensive parsing/assembly steps when rebuilding datasets or running analysis.
+These caches let you skip the expensive parsing and assembly stages when rebuilding datasets or running analysis.
 
 ### Notebooks for Analysis
 
-The [`notebooks/`](./notebooks/) directory contains Jupyter notebooks for dataset preparation and visualization.
+The [`notebooks/`](./notebooks/) directory contains Jupyter notebooks for dataset preparation, inspection, and visualization.
 
 - [`dataset_split.ipynb`](./notebooks/dataset_split.ipynb) — train/validation/test split generation
 - [`overall_stat.ipynb`](./notebooks/overall_stat.ipynb) — cluster-wide statistics
 - [`filtered_annular_stats.ipynb`](./notebooks/filtered_annular_stats.ipynb) — filtered annular statistics
 - [`inclination.ipynb`](./notebooks/inclination.ipynb) — inclination analysis of wide binary systems
+- [`t0_xy_distribution.ipynb`](./notebooks/t0_xy_distribution.ipynb) — spatial distribution inspection at the initial snapshot
 
-### _Quick Checklist_
+## Quick Start
 
 - Create and edit `.env` from `.env.template` with `SIM_ROOT_BASE` and `OUTPUT_BASE`.
 - Run `python ./src/collect_simulation_stats.py` to parse and cache simulations.
@@ -122,7 +125,7 @@ The data processing pipeline has two main stages.
 
 ### Data Model
 
-The collected NBODY6 data are structured into `Snapshot` and [`SnapshotSeries`](./src/nbody6/data/series.py) classes.
+The collected NBODY6 data are organised around `Snapshot` and [`SnapshotSeries`](./src/nbody6/data/series.py) classes.
 
 Each `Snapshot` represents the cluster state at a single timestamp `time` and contains two primary `pandas.DataFrame` objects plus a header-metadata dictionary.
 
@@ -240,7 +243,7 @@ After generating pseudo-observed snapshots, statistical analyses and visualizati
 
 Metrics are computed within concentric radial bins, where the radial axis is the distance from the density center expressed in units of the half-mass radius, `dist_dc_r_half_mass`. This normalisation makes radial profiles comparable across runs with different physical scales.
 
-The [`annular_stats.ipynb`](./notebooks/annular_stats.ipynb) notebook processes all annular bins. The [`filtered_annular_stats.ipynb`](./notebooks/filtered_annular_stats.ipynb) notebook applies an extra filter and keeps only bins where `n_star >= 5`, which reduces noise in sparse shells.
+All annular bins are exported directly by [`collect_simulation_stats.py`](./src/collect_simulation_stats.py) into `OUTPUT_BASE/stats/annular_stats/`. The [`filtered_annular_stats.ipynb`](./notebooks/filtered_annular_stats.ipynb) notebook applies an extra filter and keeps only bins where `n_star >= 5`, which reduces noise in sparse shells.
 
 ### Timestamp Alignment
 
